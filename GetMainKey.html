@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Get Main Key</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f2f2f2;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .container {
+      max-width: 800px;
+      padding: 20px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      color: #333;
+      text-align: center;
+      margin-top: 0;
+      margin-bottom: 20px;
+    }
+
+    .key-info {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .key-info p {
+      color: #777;
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .random-line {
+      position: relative;
+      font-size: 24px;
+      text-align: center;
+      padding: 10px;
+      background-color: #f9f9f9;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .copy-button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Get Main Key</h1>
+
+    <div class="key-info">
+      <p>Total Main Keys: 1</p>
+    </div>
+
+    <div class="random-line" id="randomLine">
+      Loading The Main Key...
+    </div>
+    <button class="copy-button" id="copyButton">Copy</button>
+  </div>
+
+  <script>
+ // Fetching and displaying the entire text file
+fetch('Main-Key-Password-Code.txt')
+  .then(response => response.text())
+  .then(text => {
+    document.getElementById('randomLine').textContent = text;
+
+    const copyButton = document.getElementById('copyButton');
+    copyButton.addEventListener('click', () => {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          copyButton.textContent = 'Copied!';
+          setTimeout(() => {
+            copyButton.textContent = 'Copy';
+          }, 1500);
+        })
+        .catch(error => console.log(error));
+    });
+  })
+  .catch(error => console.log(error));
+    
+  </script>
+
+<script src="https://files.coltensus.repl.co/Offline-Screen-2.js"></script>
+
+   <script src="https://coltensus.repl.co/devicedetailsgetterforconsolelogonly.js"></script>
+  
+</body>
+</html>

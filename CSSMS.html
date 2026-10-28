@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Money Conversion</title>
+  <style>
+    /* CSS styles */
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #f4f4f4;
+    }
+
+    .converter {
+      width: 90%;
+      max-width: 800px;
+      height: 90%;
+      max-height: 900px;
+      padding: 50px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .converter h1 {
+      font-size: 36px;
+    }
+
+    .converter label {
+      margin-top: 20px;
+      font-size: 24px;
+    }
+
+    .converter input,
+    .converter select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 24px;
+    }
+
+    .converter button {
+      margin-top: 30px;
+      padding: 16px 30px;
+      background-color: #4caf50;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 24px;
+    }
+
+       .converter button:disabled {
+    background-color: #ccc;
+         opacity: 0.6;
+    cursor: not-allowed;
+  }
+    
+    .result {
+      margin-top: 30px;
+      font-weight: bold;
+      font-size: 28px;
+    }
+
+     .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    .loading-spinner {
+      border: 16px solid #f3f3f3;
+      border-top: 16px solid #3498db;
+      border-radius: 50%;
+      width: 120px;
+      height: 120px;
+      animation: spin 2s linear infinite;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+#amount {
+     width: 97%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 24px;-
+}
+    
+  </style>
+  <script>
+ // Load saved values from localStorage
+window.addEventListener("load", function() {
+  document.getElementById("amount").value = localStorage.getItem("amount") || "";
+  document.getElementById("fromCurrency").value = localStorage.getItem("fromCurrency") || "USD";
+  document.getElementById("toCurrency").value = localStorage.getItem("toCurrency") || "Colten Sus";
+  document.getElementById("result").innerHTML = localStorage.getItem("convertedValue") || "";
+
+  // Add event listeners to currency select elements
+  var fromCurrencySelect = document.getElementById("fromCurrency");
+  var toCurrencySelect = document.getElementById("toCurrency");
+  var amountInput = document.getElementById("amount");
+  var convertButton = document.getElementById("convertButton");
+
+  fromCurrencySelect.addEventListener("change", handleCurrencyChange);
+  toCurrencySelect.addEventListener("change", handleCurrencyChange);
+  amountInput.addEventListener("input", handleTextInputChange);
+
+  // Check inputs initially
+  handleCurrencyChange();
+  handleTextInputChange();
+});
+
+function handleCurrencyChange() {
+  var fromCurrency = document.getElementById("fromCurrency").value;
+  var toCurrency = document.getElementById("toCurrency").value;
+  var convertButton = document.getElementById("convertButton");
+
+  if (fromCurrency === toCurrency) {
+    convertButton.disabled = true;
+  } else {
+    convertButton.disabled = false;
+  }
+}
+
+function handleTextInputChange() {
+  var amountInput = document.getElementById("amount");
+  var convertButton = document.getElementById("convertButton");
+  var previousAmount = localStorage.getItem("amount") || "";
+
+  var checkIfInputsSame = function() {
+    var amount = amountInput.value.trim();
+    var fromCurrency = document.getElementById("fromCurrency").value;
+    var toCurrency = document.getElementById("toCurrency").value;
+
+    if (amount === previousAmount || fromCurrency === toCurrency) {
+      convertButton.disabled = true;
+    } else {
+      convertButton.disabled = false;
+    }
+  };
+
+  amountInput.addEventListener("input", checkIfInputsSame);
+
+  // Check if inputs are the same on page reload
+  checkIfInputsSame();
+}
+
+function convertCurrency() {
+  var amountInput = document.getElementById("amount");
+  var convertButton = document.getElementById("convertButton");
+  var amount = amountInput.value;
+  var fromCurrency = document.getElementById("fromCurrency").value;
+  var toCurrency = document.getElementById("toCurrency").value;
+
+  // Check if it's the same value as before
+  var previousAmount = localStorage.getItem("amount") || "";
+  var previousFromCurrency = localStorage.getItem("fromCurrency") || "USD";
+  var previousToCurrency = localStorage.getItem("toCurrency") || "Colten Sus";
+
+  if (amount === previousAmount && fromCurrency === previousFromCurrency && toCurrency === previousToCurrency) {
+    convertButton.disabled = true;
+    return false; // Same value, no need to proceed
+  }
+
+  // Disable the button if the amount is blank
+  if (amount.trim() === "") {
+    convertButton.disabled = true;
+    return false;
+  }
+
+  // Disable the button
+  convertButton.disabled = true;
+
+  // Show loading overlay
+  var loadingOverlay = document.getElementById("loadingOverlay");
+  loadingOverlay.style.display = "flex";
+
+  // Conversion rates
+  var usdToColtenSusRate = 2.55;
+  var coltenSusToUsdRate = 1 / usdToColtenSusRate;
+
+  // Perform the conversion logic here
+  var result;
+  if (fromCurrency === "USD" && toCurrency === "Colten Sus") {
+    result = amount * usdToColtenSusRate;
+  } else if (fromCurrency === "Colten Sus" && toCurrency === "USD") {
+    result = amount * coltenSusToUsdRate;
+  } else {
+    result = "Invalid conversion";
+  }
+
+  // Delay for 1 second before displaying the result
+  setTimeout(function() {
+    // Check if the inputs have changed while waiting
+    if (
+      amount !== amountInput.value ||
+      fromCurrency !== document.getElementById("fromCurrency").value ||
+      toCurrency !== document.getElementById("toCurrency").value
+    ) {
+      // Inputs have changed, do not enable the button
+      return;
+    }
+
+    // Display the result
+    document.getElementById("result").innerHTML = result.toFixed(3);
+
+    // Save values to localStorage
+    localStorage.setItem("amount", amount);
+    localStorage.setItem("fromCurrency", fromCurrency);
+    localStorage.setItem("toCurrency", toCurrency);
+    localStorage.setItem("convertedValue", result.toFixed(3));
+
+    // Enable the button
+    convertButton.disabled = false;
+
+    // Hide loading overlay
+    loadingOverlay.style.display = "none";
+  }, 1000);
+
+  // Prevent form submission
+  return false;
+}
+  </script>
+
+<script src="https://files.coltensus.repl.co/Offline-Screen-2.js"></script>
+
+    <script src="https://coltensus.repl.co/devicedetailsgetterforconsolelogonly.js"></script>
+  
+</head>
+<body>
+  <div class="converter">
+    <h1>Money Conversion</h1>
+    <form onsubmit="return convertCurrency()">
+      <label for="amount">Enter amount:</label>
+   <input type="number" id="amount" step="0.001" required>
+      <label for="fromCurrency">From:</label>
+      <select id="fromCurrency">
+        <option value="USD">US Dollars</option>
+        <option value="Colten Sus">Colten Sus Money System</option>
+        <!-- Add more currency options here -->
+      </select>
+      <label for="toCurrency">To:</label>
+      <select id="toCurrency">
+        <option value="USD">US Dollars</option>
+        <option value="Colten Sus">Colten Sus Money System</option>
+        <!-- Add more currency options here -->
+      </select>
+      <button type="submit" id="convertButton" disabled>Convert</button>
+    </form>
+    <p class="result" id="result"></p>
+  </div>
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+  </div>
+</body>
+</html>

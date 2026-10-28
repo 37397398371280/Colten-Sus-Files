@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+   
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="ice-cream-pattern.png">
+    <!-- Your existing CSS and other code -->
+
+<title>The Sweet Tee App Is Coming Soon!</title>
+  
+    <style>
+        body {
+            background-color: #fdffd9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+          overflow: hidden;
+          
+        }
+
+        .container {
+            text-align: center;
+            margin-top: 30vh;
+            padding: 0 20px;
+        }
+
+        h1 {
+            font-size: 54px;
+            color: #ff9f4d;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-bottom: 10px;
+        }
+
+        p {
+            font-size: 24px;
+            color: #565656;
+            margin-top: 10px;
+        }
+
+        .release-date {
+            font-size: 20px;
+            color: #888888;
+            margin-top: 30px;
+        }
+.container::before {
+    content: '';
+    background-image: url('ice-cream-pattern.png');
+    background-repeat: no-repeat;
+    background-position: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    opacity: 0.5; /* Adjust the opacity value as desired */
+}
+
+
+
+
+
+        @media only screen and (max-width: 600px) {
+            .container {
+                margin-top: 20vh;
+              background-size: contain;
+            }
+
+            .container::before {
+        background-size: contain;
+    }
+}
+
+            h1 {
+                font-size: 36px;
+            }
+
+            p {
+                font-size: 18px;
+            }
+      
+.button {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #4CAF50;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.button:hover {
+  background-color: #45a049;
+}
+
+.button:active {
+  background-color: #3e8e41;
+}
+      
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>The Sweet Tee</h1>
+        <p>"The Sweet Tee" ice cream app. With its tantalizing array of flavors and delightful features, I'm sure it will be a treat for ice cream lovers everywhere. Stay tuned for the release date, and get ready to experience a sweet and satisfying adventure with The Sweet Tee!</p>
+        <p class="release-date">Release Date: July 15, 2023</p>
+
+      <br>
+<button class="button">Coming Soon!</button>
+<br>
+
+            <br>
+<a href="/"><button class="button">Go Back</button></a>
+<br>
+      
+    </div>
+</body>
+</html>
+
+<script>
+  alert("This Is A Preview Of It!!!!!!");
+    alert("EDITOR NOTE: MAYBE JULY 15 2023 OK?");
+</script>
+
+<script src="https://files.coltensus.repl.co/Offline-Screen-2.js"></script>
+
+  <script src="https://coltensus.repl.co/devicedetailsgetterforconsolelogonly.js"></script>
