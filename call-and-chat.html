@@ -1093,6 +1093,10 @@
                 }
             }
 
+            
+                            // ---------------------------------------------------------
+            // FIXED PEER HANDSHAKE & OFFER NEGOTIATION
+            // ---------------------------------------------------------
             async function sendOfferToPeer(peerEntry) {
                 if (!peerEntry || peerEntry.pc.signalingState !== 'stable') return;
                 try {
@@ -1174,8 +1178,8 @@
                     if (msg.timestamp) peer.joinTimestamp = msg.timestamp;
                     updateParticipantList();
 
-                    // Re-trigger offer if we are the offerer and ICE hasn't connected yet
-                    if (shouldOffer && ['new', 'disconnected'].includes(peer.pc.iceConnectionState)) {
+                    // Force retry offer if stuck
+                    if (shouldOffer && ['new', 'disconnected', 'checking'].includes(peer.pc.iceConnectionState)) {
                         await sendOfferToPeer(peer);
                     }
                 } else if (msg.type === 'offer') {
