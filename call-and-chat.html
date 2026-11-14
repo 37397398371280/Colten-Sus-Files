@@ -198,7 +198,7 @@
                     <button id="tabChatBtn" class="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white transition-all">Chat & Files</button>
                     <button id="tabParticipantsBtn" class="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">Peers (<span id="participantTabCount">1</span>)</button>
                 </div>
-                <button id="closeSidebarBtn" class="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white">
+                <button id="closeSidebarBtn" class="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white md:hidden">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -210,7 +210,7 @@
                 </div>
 
                 <form id="chatForm" class="p-2.5 sm:p-3 border-t border-gray-800 bg-darkBg/60 flex items-center gap-2 safe-bottom">
-                    <label class="p-2 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-300 cursor-pointer transition-all flex items-center justify-center" title="Send File">
+                    <label class="p-2 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-300 cursor-pointer transition-all flex items-center justify-center" title="Send File (Max 10MB)">
                         <i data-lucide="paperclip" class="w-4 h-4"></i>
                         <input type="file" id="fileInput" class="hidden">
                     </label>
@@ -374,38 +374,44 @@
                 ]
             };
 
+            const FILE_CHUNK_SIZE = 16384; // 16KB safe WebRTC DataChannel chunk
+            const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB cap
+
             const state = {
                 localPeerId: 'p_' + Math.random().toString(36).substring(2, 9),
                 joinTimestamp: Date.now(),
+                hostTimestamp: Date.now(),
                 displayName: localStorage.getItem('nexus_name') || ('User_' + Math.floor(100 + Math.random() * 900)),
                 roomId: '',
                 isProtected: false,
                 roomPassword: '',
                 roomAuthHash: '',
                 topicHash: '',
-                isHost: false, // Will be determined via handshake response
+                isHost: false,
                 isCoHost: false,
                 hostPeerId: '',
                 roomLocked: false,
                 localStream: null,
                 screenStream: null,
-                useFacingMode: 'user', // 'user' or 'environment'
-                peers: new Map(), // peerId -> { pc, dc, name, stream, remoteVideoEl, role, isMuted }
+                useFacingMode: 'user',
+                peers: new Map(), // peerId -> { pc, dc, name, remoteStream, tileEl, videoEl, isHost, isCoHost, joinTimestamp, iceQueue, remoteDescSet, fileBuffers }
                 bc: null,
+                presenceInterval: null,
+                statsInterval: null,
                 mqttWs: null,
                 mqttConnected: false,
                 micEnabled: true,
                 camEnabled: true,
                 handRaised: false,
                 isScreenSharing: false,
-                callStartTime: Date.now(),
+                callStartTime: null,
                 callTimerInterval: null,
                 unreadCount: 0,
                 sidebarOpen: false,
-                activeTab: 'chat',
                 audioContext: null,
                 analyser: null,
-                audioDataArray: null
+                audioDataArray: null,
+                audioRafId: null
             };
 
             const $ = id => document.getElementById(id);
@@ -498,6 +504,7 @@
                 window.addEventListener('touchend', dragEnd);
 
                 function dragStart(e) {
+                    if (e.target.closest('button')) return;
                     isDragging = true;
                     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
                     const clientY = e.clientY || (e.touches && e.touches[0].clientY);
@@ -509,7 +516,7 @@
                     boxEl.style.transform = 'none';
                     initialX = rect.left;
                     initialY = rect.top;
-                    if(e.type === 'touchstart') e.preventDefault();
+                    if (e.type === 'touchstart') e.preventDefault();
                 }
 
                 function drag(e) {
@@ -520,7 +527,7 @@
                     const dy = clientY - startY;
                     boxEl.style.left = (initialX + dx) + 'px';
                     boxEl.style.top = (initialY + dy) + 'px';
-                    if(e.type === 'touchmove') e.preventDefault();
+                    if (e.type === 'touchmove') e.preventDefault();
                 }
 
                 function dragEnd() {
@@ -542,14 +549,16 @@
             });
 
             // ---------------------------------------------------------
-            // TOAST & UTILS
+            // TOAST & UTILS (XSS-SAFE)
             // ---------------------------------------------------------
             function showToast(message, type = 'info') {
                 const toast = document.createElement('div');
                 toast.className = `px-3.5 py-2.5 rounded-xl text-xs font-semibold glass text-white shadow-xl pointer-events-auto transition-all animate-bounce flex items-center gap-2 border ${
                     type === 'error' ? 'border-red-500/50 bg-red-950/90' : 'border-indigo-500/50 bg-gray-900/95'
                 }`;
-                toast.innerHTML = `<span>${message}</span>`;
+                const span = document.createElement('span');
+                span.textContent = message;
+                toast.appendChild(span);
                 els.toastContainer.appendChild(toast);
                 setTimeout(() => {
                     toast.style.opacity = '0';
@@ -571,7 +580,67 @@
             }
 
             function getInitials(name) {
-                return (name || 'U').substring(0, 2).toUpperCase();
+                return (name || 'U').trim().substring(0, 2).toUpperCase();
+            }
+
+            function updateLocalVideoMirror() {
+                const shouldMirror = !state.isScreenSharing && state.useFacingMode === 'user';
+                els.localVideo.classList.toggle('mirrored', shouldMirror);
+            }
+
+            // ---------------------------------------------------------
+            // TELEMETRY DRAWER
+            // ---------------------------------------------------------
+            els.toggleStatsBtn.addEventListener('click', () => {
+                els.telemetryDrawer.classList.toggle('hidden');
+                if (!els.telemetryDrawer.classList.contains('hidden')) {
+                    updateTelemetry();
+                }
+            });
+
+            async function updateTelemetry() {
+                if (els.telemetryDrawer.classList.contains('hidden')) return;
+                els.telemetryPeerCount.textContent = `${state.peers.size} Peer${state.peers.size === 1 ? '' : 's'}`;
+
+                if (state.peers.size === 0) {
+                    els.telemetryContent.textContent = 'No active peer telemetry.';
+                    return;
+                }
+
+                els.telemetryContent.innerHTML = '';
+                for (const [peerId, peer] of state.peers.entries()) {
+                    const block = document.createElement('div');
+                    block.className = 'p-2 rounded-lg bg-gray-900/90 border border-gray-800 space-y-0.5';
+
+                    let rtt = 'N/A';
+                    let packetsLost = 0;
+                    let bytesRecv = 0;
+
+                    try {
+                        const stats = await peer.pc.getStats();
+                        stats.forEach(report => {
+                            if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.currentRoundTripTime != null) {
+                                rtt = `${Math.round(report.currentRoundTripTime * 1000)} ms`;
+                            }
+                            if (report.type === 'inbound-rtp') {
+                                if (report.packetsLost) packetsLost += report.packetsLost;
+                                if (report.bytesReceived) bytesRecv += report.bytesReceived;
+                            }
+                        });
+                    } catch (e) {}
+
+                    const title = document.createElement('div');
+                    title.className = 'text-indigo-300 font-bold truncate';
+                    title.textContent = `${peer.name} (${peerId.slice(0, 6)})`;
+
+                    const details = document.createElement('div');
+                    details.className = 'text-gray-400';
+                    details.textContent = `ICE: ${peer.pc.iceConnectionState} | RTT: ${rtt} | Lost: ${packetsLost} | RX: ${(bytesRecv / 1024).toFixed(0)} KB`;
+
+                    block.appendChild(title);
+                    block.appendChild(details);
+                    els.telemetryContent.appendChild(block);
+                }
             }
 
             // ---------------------------------------------------------
@@ -617,8 +686,12 @@
                         audio: { echoCancellation: true, noiseSuppression: true }
                     };
                     state.localStream = await navigator.mediaDevices.getUserMedia(constraints || defaultConstraints);
+                    state.localStream.getAudioTracks().forEach(t => t.enabled = state.micEnabled);
+                    state.localStream.getVideoTracks().forEach(t => t.enabled = state.camEnabled);
+
                     els.localVideo.srcObject = state.localStream;
-                    els.localPlaceholder.classList.add('hidden');
+                    els.localPlaceholder.classList.toggle('hidden', state.camEnabled);
+                    updateLocalVideoMirror();
                     setupAudioVisualizer(state.localStream);
                     await populateDeviceList();
                 } catch (err) {
@@ -648,21 +721,31 @@
 
             function setupAudioVisualizer(stream) {
                 try {
-                    if (!window.AudioContext && !window.webkitAudioContext) return;
-                    state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    if (state.audioRafId) {
+                        cancelAnimationFrame(state.audioRafId);
+                        state.audioRafId = null;
+                    }
+                    if (state.audioContext) {
+                        state.audioContext.close().catch(() => {});
+                        state.audioContext = null;
+                    }
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioCtx || !stream.getAudioTracks().length) return;
+
+                    state.audioContext = new AudioCtx();
                     const source = state.audioContext.createMediaStreamSource(stream);
                     state.analyser = state.audioContext.createAnalyser();
                     state.analyser.fftSize = 256;
                     source.connect(state.analyser);
                     state.audioDataArray = new Uint8Array(state.analyser.frequencyBinCount);
                     checkAudioVolume();
-                } catch(e) {}
+                } catch (e) {}
             }
 
             function checkAudioVolume() {
                 if (!state.analyser || !state.micEnabled) {
                     if (els.localAudioVisualizer) els.localAudioVisualizer.style.opacity = '0';
-                    requestAnimationFrame(checkAudioVolume);
+                    state.audioRafId = requestAnimationFrame(checkAudioVolume);
                     return;
                 }
                 state.analyser.getByteFrequencyData(state.audioDataArray);
@@ -671,12 +754,8 @@
                     sum += state.audioDataArray[i];
                 }
                 const avg = sum / state.audioDataArray.length;
-                if (avg > 15) {
-                    els.localAudioVisualizer.style.opacity = Math.min(1, avg / 60);
-                } else {
-                    els.localAudioVisualizer.style.opacity = '0';
-                }
-                requestAnimationFrame(checkAudioVolume);
+                els.localAudioVisualizer.style.opacity = avg > 15 ? Math.min(1, avg / 60) : '0';
+                state.audioRafId = requestAnimationFrame(checkAudioVolume);
             }
 
             async function populateDeviceList() {
@@ -687,11 +766,11 @@
                     devices.forEach(device => {
                         const opt = document.createElement('option');
                         opt.value = device.deviceId;
-                        opt.text = device.label || `${device.kind} (${device.deviceId.substring(0, 5)})`;
+                        opt.textContent = device.label || `${device.kind} (${device.deviceId.substring(0, 5)})`;
                         if (device.kind === 'videoinput') els.videoSourceSelect.appendChild(opt);
                         else if (device.kind === 'audioinput') els.audioSourceSelect.appendChild(opt);
                     });
-                } catch(e) {}
+                } catch (e) {}
             }
 
             els.videoSourceSelect.addEventListener('change', async () => {
@@ -715,10 +794,12 @@
                     if (videoTrack) {
                         const vs = senders.find(s => s.track && s.track.kind === 'video');
                         if (vs) vs.replaceTrack(videoTrack);
+                        else peer.pc.addTrack(videoTrack, state.localStream);
                     }
                     if (audioTrack) {
                         const as = senders.find(s => s.track && s.track.kind === 'audio');
                         if (as) as.replaceTrack(audioTrack);
+                        else peer.pc.addTrack(audioTrack, state.localStream);
                     }
                 });
             }
@@ -735,22 +816,24 @@
                 if (!roomId) { showLobbyError('Please enter a valid Room ID.'); return; }
                 if (state.isProtected && !password) { showLobbyError('Please enter the room password.'); return; }
 
+                els.lobbyErrorBox.classList.add('hidden');
                 state.displayName = name;
                 localStorage.setItem('nexus_name', name);
                 state.roomId = roomId;
                 state.roomPassword = password;
+                state.joinTimestamp = Date.now();
+                state.hostTimestamp = state.joinTimestamp;
 
                 state.topicHash = await sha256Hex(`nexus-topic-${roomId}`);
                 const secretMaterial = state.isProtected ? `protected:${roomId}:${password}` : `open:${roomId}`;
                 state.roomAuthHash = await sha256Hex(secretMaterial);
 
-                // Initially assume we are host until room-state check reveals an existing host
+                // Tentatively assume host until an older peer responds
                 state.isHost = true;
                 state.hostPeerId = state.localPeerId;
                 updateRoleUI();
 
                 els.roomBadge.textContent = `Room: ${roomId}`;
-                els.localNameLabel.textContent = `${name} (You - Host)`;
                 els.localAvatar.textContent = getInitials(name);
 
                 const newUrl = new URL(window.location.href);
@@ -763,10 +846,15 @@
                 initBroadcastChannel();
                 connectMqttRelay();
                 startCallTimer();
+                state.statsInterval = setInterval(updateTelemetry, 2000);
 
-                // Broadcast join request to discover existing peers and room state
                 setTimeout(() => {
-                    broadcastSignal({ type: 'join-room', name: state.displayName, timestamp: state.joinTimestamp, authHash: state.roomAuthHash });
+                    broadcastSignal({
+                        type: 'join-room',
+                        name: state.displayName,
+                        timestamp: state.joinTimestamp,
+                        authHash: state.roomAuthHash
+                    });
                 }, 300);
 
                 showToast(`Joined room ${roomId} successfully!`);
@@ -775,6 +863,20 @@
             function showLobbyError(msg) {
                 els.lobbyErrorBox.classList.remove('hidden');
                 els.lobbyErrorText.textContent = msg;
+            }
+
+            function abortJoinToLobby(reason) {
+                if (state.localStream) state.localStream.getTracks().forEach(t => t.stop());
+                if (state.bc) { state.bc.close(); state.bc = null; }
+                if (state.mqttWs) { state.mqttWs.close(); state.mqttWs = null; }
+                if (state.presenceInterval) clearInterval(state.presenceInterval);
+                if (state.callTimerInterval) clearInterval(state.callTimerInterval);
+                if (state.statsInterval) clearInterval(state.statsInterval);
+                state.peers.forEach(p => { p.pc.close(); p.tileEl.remove(); });
+                state.peers.clear();
+                state.roomId = '';
+                els.lobbyModal.classList.remove('hidden');
+                showLobbyError(reason);
             }
 
             function updateRoleUI() {
@@ -793,6 +895,7 @@
                     els.hostSettingsHeaderBtn.classList.add('hidden');
                     els.localNameLabel.textContent = `${state.displayName} (You)`;
                 }
+                updateParticipantList();
             }
 
             // ---------------------------------------------------------
@@ -802,18 +905,27 @@
                 if (window.BroadcastChannel) {
                     state.bc = new BroadcastChannel(`nexus-bc-${state.roomId}`);
                     state.bc.onmessage = (e) => handleSignalingMessage(e.data);
-                    // Periodically announce presence
-                    setInterval(() => {
-                        if (state.roomId) announcePresence();
-                    }, 4000);
                 }
+                state.presenceInterval = setInterval(() => {
+                    if (state.roomId) announcePresence();
+                }, 4000);
             }
 
             function announcePresence() {
-                broadcastSignal({ type: 'presence-announce', name: state.displayName, timestamp: state.joinTimestamp, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost, hostPeerId: state.hostPeerId });
+                broadcastSignal({
+                    type: 'presence-announce',
+                    name: state.displayName,
+                    timestamp: state.joinTimestamp,
+                    hostTimestamp: state.hostTimestamp,
+                    authHash: state.roomAuthHash,
+                    isHost: state.isHost,
+                    isCoHost: state.isCoHost,
+                    hostPeerId: state.hostPeerId
+                });
             }
 
             function broadcastSignal(payload) {
+                if (!state.roomId) return;
                 const msg = { ...payload, from: state.localPeerId, room: state.roomId };
                 if (state.bc) state.bc.postMessage(msg);
                 if (state.mqttConnected && state.mqttWs && state.mqttWs.readyState === WebSocket.OPEN) {
@@ -834,22 +946,43 @@
 
                     ws.onmessage = (event) => {
                         const data = new Uint8Array(event.data);
-                        if ((data[0] >> 4) === 2) {
+                        const packetType = data[0] >> 4;
+                        if (packetType === 2) {
                             state.mqttConnected = true;
                             ws.send(buildMqttSubscribePacket(1, `nexusrtc/v1/${state.topicHash}`));
-                            announcePresence();
-                        } else if ((data[0] >> 4) === 3) {
+                            broadcastSignal({
+                                type: 'join-room',
+                                name: state.displayName,
+                                timestamp: state.joinTimestamp,
+                                authHash: state.roomAuthHash
+                            });
+                        } else if (packetType === 3) {
                             parseMqttPublish(data, (jsonStr) => {
                                 try {
                                     const msg = JSON.parse(jsonStr);
                                     if (msg.from !== state.localPeerId && msg.room === state.roomId) {
                                         handleSignalingMessage(msg);
                                     }
-                                } catch(e) {}
+                                } catch (e) {}
                             });
                         }
                     };
-                } catch(e) {}
+
+                    ws.onclose = () => {
+                        state.mqttConnected = false;
+                    };
+                } catch (e) {}
+            }
+
+            function encodeMqttRemainingLength(len) {
+                const bytes = [];
+                do {
+                    let digit = len % 128;
+                    len = Math.floor(len / 128);
+                    if (len > 0) digit |= 0x80;
+                    bytes.push(digit);
+                } while (len > 0);
+                return bytes;
             }
 
             function sendMqttMessage(payloadObj) {
@@ -863,21 +996,20 @@
                 const flags = [0x04, 0x02, 0x00, 0x3c];
                 const cidBytes = new TextEncoder().encode(clientId);
                 const payload = [...proto, ...flags, cidBytes.length >> 8, cidBytes.length & 0xff, ...Array.from(cidBytes)];
-                return new Uint8Array([0x10, payload.length, ...payload]).buffer;
+                return new Uint8Array([0x10, ...encodeMqttRemainingLength(payload.length), ...payload]).buffer;
             }
 
             function buildMqttSubscribePacket(packetId, topic) {
                 const tBytes = new TextEncoder().encode(topic);
                 const payload = [packetId >> 8, packetId & 0xff, tBytes.length >> 8, tBytes.length & 0xff, ...Array.from(tBytes), 0x00];
-                return new Uint8Array([0x82, payload.length, ...payload]).buffer;
+                return new Uint8Array([0x82, ...encodeMqttRemainingLength(payload.length), ...payload]).buffer;
             }
 
             function buildMqttPublishPacket(topic, message) {
                 const tBytes = new TextEncoder().encode(topic);
                 const mBytes = new TextEncoder().encode(message);
                 const payload = [tBytes.length >> 8, tBytes.length & 0xff, ...Array.from(tBytes), ...Array.from(mBytes)];
-                const len = payload.length;
-                return new Uint8Array([0x30, len < 128 ? len : 128, ...payload]).buffer;
+                return new Uint8Array([0x30, ...encodeMqttRemainingLength(payload.length), ...payload]).buffer;
             }
 
             function parseMqttPublish(data, callback) {
@@ -888,27 +1020,51 @@
                     remLen += (byte & 127) * multiplier;
                     multiplier *= 128;
                 } while ((byte & 128) !== 0);
-                const tLen = (data[i] << 8) + data[i+1];
+                const packetEnd = i + remLen;
+                if (i + 2 > data.length) return;
+                const tLen = (data[i] << 8) + data[i + 1];
                 i += 2 + tLen;
-                callback(new TextDecoder().decode(data.slice(i)));
+                if (i > packetEnd || packetEnd > data.length) return;
+                callback(new TextDecoder().decode(data.slice(i, packetEnd)));
             }
 
             // ---------------------------------------------------------
             // ROBUST WEBRTC PEER MESH & HANDSHAKE
             // ---------------------------------------------------------
+            function adoptAuthoritativeHost(candidateHostId, candidateHostTs) {
+                if (!candidateHostId) return;
+                const ts = candidateHostTs || Infinity;
+                const isOlder = ts < state.hostTimestamp;
+                const isTieWin = ts === state.hostTimestamp && candidateHostId < state.hostPeerId;
+
+                if (isOlder || isTieWin) {
+                    state.hostPeerId = candidateHostId;
+                    state.hostTimestamp = ts;
+                    state.isHost = (state.localPeerId === state.hostPeerId);
+                    updateRoleUI();
+                }
+            }
+
             async function handleSignalingMessage(msg) {
                 if (!msg || msg.room !== state.roomId || msg.from === state.localPeerId) return;
 
-                if (state.roomLocked && (msg.type === 'presence-announce' || msg.type === 'join-room')) {
-                    broadcastSignal({ type: 'reject_join', target: msg.from, reason: 'Room is locked by Host' });
+                if (msg.target && msg.target !== state.localPeerId) return;
+
+                if (msg.type === 'reject_join' || msg.type === 'auth_reject') {
+                    abortJoinToLobby(msg.reason || 'Access denied by room host.');
                     return;
                 }
 
-                if (msg.target && msg.target !== state.localPeerId) return;
+                if (state.roomLocked && (msg.type === 'presence-announce' || msg.type === 'join-room')) {
+                    if (state.isHost) {
+                        broadcastSignal({ type: 'reject_join', target: msg.from, reason: 'Room is locked by Host' });
+                    }
+                    return;
+                }
 
                 if (msg.authHash !== state.roomAuthHash) {
-                    if (msg.type === 'presence-announce' || msg.type === 'join-room') {
-                        broadcastSignal({ type: 'auth_reject', target: msg.from, reason: 'Password Mismatch' });
+                    if ((msg.type === 'presence-announce' || msg.type === 'join-room') && state.isHost) {
+                        broadcastSignal({ type: 'auth_reject', target: msg.from, reason: 'Invalid room password.' });
                     }
                     return;
                 }
@@ -916,56 +1072,70 @@
                 const peerId = msg.from;
 
                 if (msg.type === 'join-room') {
-                    // Respond with room state so new joiner knows who the host is
+                    adoptAuthoritativeHost(peerId, msg.timestamp);
                     broadcastSignal({
                         type: 'room-state',
                         target: peerId,
                         hostPeerId: state.hostPeerId,
+                        hostTimestamp: state.hostTimestamp,
                         isHost: state.isHost,
                         isCoHost: state.isCoHost,
                         name: state.displayName,
-                        timestamp: state.joinTimestamp
+                        timestamp: state.joinTimestamp,
+                        authHash: state.roomAuthHash
                     });
 
-                    // Establish peer connection (deterministically offer if our ID > peerId)
                     if (!state.peers.has(peerId)) {
                         const shouldOffer = state.localPeerId > peerId;
-                        getOrCreatePeer(peerId, msg.name, shouldOffer, false, false);
+                        getOrCreatePeer(peerId, msg.name, shouldOffer, false, false, msg.timestamp);
                     }
-                } else if (msg.type === 'room-state') {
-                    // If we thought we were host, but an older joiner or existing host exists, respect authoritative host
-                    if (msg.hostPeerId && msg.hostPeerId !== state.localPeerId) {
-                        if (msg.hostPeerId < state.hostPeerId || state.isHost) {
-                            state.hostPeerId = msg.hostPeerId;
-                            state.isHost = (state.localPeerId === state.hostPeerId);
-                            updateRoleUI();
-                        }
-                    }
+                } else if (msg.type === 'room-state' || msg.type === 'presence-announce') {
+                    adoptAuthoritativeHost(msg.hostPeerId, msg.hostTimestamp);
+
                     if (!state.peers.has(peerId)) {
                         const shouldOffer = state.localPeerId > peerId;
-                        getOrCreatePeer(peerId, msg.name || 'Peer', shouldOffer, msg.isHost, msg.isCoHost);
-                    }
-                } else if (msg.type === 'presence-announce') {
-                    if (!state.peers.has(peerId)) {
-                        const shouldOffer = state.localPeerId > peerId;
-                        getOrCreatePeer(peerId, msg.name || 'Peer', shouldOffer, msg.isHost, msg.isCoHost);
+                        getOrCreatePeer(peerId, msg.name || 'Peer', shouldOffer, msg.isHost, msg.isCoHost, msg.timestamp);
                     } else {
                         const peer = state.peers.get(peerId);
-                        if (peer && msg.name) peer.name = msg.name;
+                        if (peer) {
+                            if (msg.name) {
+                                peer.name = msg.name;
+                                peer.nametagSpan.textContent = msg.name;
+                            }
+                            peer.isHost = !!msg.isHost;
+                            peer.isCoHost = !!msg.isCoHost;
+                            if (msg.timestamp) peer.joinTimestamp = msg.timestamp;
+                            updateParticipantList();
+                        }
                     }
                 } else if (msg.type === 'offer') {
-                    const peer = getOrCreatePeer(peerId, msg.name || 'Peer', false, msg.isHost, msg.isCoHost);
+                    const peer = getOrCreatePeer(peerId, msg.name || 'Peer', false, msg.isHost, msg.isCoHost, msg.timestamp);
                     await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                    peer.remoteDescSet = true;
+                    await flushIceQueue(peer);
                     const answer = await peer.pc.createAnswer();
                     await peer.pc.setLocalDescription(answer);
-                    broadcastSignal({ type: 'answer', target: peerId, sdp: peer.pc.localDescription, authHash: state.roomAuthHash });
+                    broadcastSignal({
+                        type: 'answer',
+                        target: peerId,
+                        sdp: peer.pc.localDescription,
+                        authHash: state.roomAuthHash
+                    });
                 } else if (msg.type === 'answer') {
                     const peer = state.peers.get(peerId);
-                    if (peer) await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                    if (peer) {
+                        await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                        peer.remoteDescSet = true;
+                        await flushIceQueue(peer);
+                    }
                 } else if (msg.type === 'ice') {
                     const peer = state.peers.get(peerId);
                     if (peer && msg.candidate) {
-                        await peer.pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+                        if (peer.remoteDescSet) {
+                            await peer.pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+                        } else {
+                            peer.iceQueue.push(msg.candidate);
+                        }
                     }
                 } else if (msg.type === 'bye') {
                     removePeer(peerId);
@@ -992,7 +1162,14 @@
                 }
             }
 
-            function getOrCreatePeer(peerId, peerName = 'Peer', shouldOffer = false, isHost = false, isCoHost = false) {
+            async function flushIceQueue(peer) {
+                while (peer.iceQueue.length > 0) {
+                    const candidate = peer.iceQueue.shift();
+                    await peer.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+                }
+            }
+
+            function getOrCreatePeer(peerId, peerName = 'Peer', shouldOffer = false, isHost = false, isCoHost = false, joinTimestamp = Date.now()) {
                 if (state.peers.has(peerId)) return state.peers.get(peerId);
 
                 const pc = new RTCPeerConnection(ICE_SERVERS);
@@ -1001,7 +1178,7 @@
                 const tile = document.createElement('div');
                 tile.className = 'relative w-full h-full min-h-[180px] sm:min-h-[220px] rounded-xl overflow-hidden bg-gray-900 border-2 border-gray-800 flex items-center justify-center shadow-lg group';
                 tile.id = `tile_${peerId}`;
-                
+
                 const video = document.createElement('video');
                 video.autoplay = true;
                 video.playsInline = true;
@@ -1011,20 +1188,44 @@
 
                 const placeholder = document.createElement('div');
                 placeholder.className = 'absolute inset-0 bg-gradient-to-br from-gray-900 to-indigo-950 flex flex-col items-center justify-center gap-2';
-                placeholder.innerHTML = `
-                    <div class="w-14 h-14 rounded-full bg-emerald-600/30 border-2 border-emerald-500/50 flex items-center justify-center text-lg font-bold text-emerald-200">${getInitials(peerName)}</div>
-                    <span class="text-xs text-gray-400 font-medium">Connecting...</span>
-                `;
+
+                const avatar = document.createElement('div');
+                avatar.className = 'w-14 h-14 rounded-full bg-emerald-600/30 border-2 border-emerald-500/50 flex items-center justify-center text-lg font-bold text-emerald-200';
+                avatar.textContent = getInitials(peerName);
+
+                const statusSpan = document.createElement('span');
+                statusSpan.className = 'text-xs text-gray-400 font-medium';
+                statusSpan.textContent = 'Connecting...';
+
+                placeholder.appendChild(avatar);
+                placeholder.appendChild(statusSpan);
                 tile.appendChild(placeholder);
 
                 const nametag = document.createElement('div');
                 nametag.className = 'absolute bottom-2.5 left-2.5 px-2 py-1 rounded-lg bg-black/70 backdrop-blur-md border border-white/10 text-[11px] font-medium flex items-center gap-1.5 z-10';
-                nametag.innerHTML = `<span>${peerName}</span>`;
+                const nametagSpan = document.createElement('span');
+                nametagSpan.textContent = peerName;
+                nametag.appendChild(nametagSpan);
                 tile.appendChild(nametag);
 
                 els.videoGrid.appendChild(tile);
 
-                const peerEntry = { peerId, name: peerName, pc, dc: null, remoteStream, tileEl: tile, videoEl: video, isHost, isCoHost };
+                const peerEntry = {
+                    peerId,
+                    name: peerName,
+                    pc,
+                    dc: null,
+                    remoteStream,
+                    tileEl: tile,
+                    videoEl: video,
+                    nametagSpan,
+                    isHost: !!isHost,
+                    isCoHost: !!isCoHost,
+                    joinTimestamp,
+                    iceQueue: [],
+                    remoteDescSet: false,
+                    fileBuffers: new Map()
+                };
                 state.peers.set(peerId, peerEntry);
                 updateParticipantList();
 
@@ -1033,11 +1234,21 @@
                 }
 
                 pc.onicecandidate = e => {
-                    if (e.candidate) broadcastSignal({ type: 'ice', target: peerId, candidate: e.candidate, authHash: state.roomAuthHash });
+                    if (e.candidate) {
+                        broadcastSignal({ type: 'ice', target: peerId, candidate: e.candidate, authHash: state.roomAuthHash });
+                    }
                 };
 
                 pc.ontrack = e => {
-                    e.streams[0].getTracks().forEach(t => remoteStream.addTrack(t));
+                    if (e.streams && e.streams[0]) {
+                        e.streams[0].getTracks().forEach(t => {
+                            if (!remoteStream.getTracks().some(rt => rt.id === t.id)) {
+                                remoteStream.addTrack(t);
+                            }
+                        });
+                    } else if (e.track) {
+                        remoteStream.addTrack(e.track);
+                    }
                     placeholder.classList.add('hidden');
                 };
 
@@ -1045,14 +1256,25 @@
                     const dc = pc.createDataChannel('nexus_chat');
                     setupDataChannel(peerEntry, dc);
                     pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => {
-                        broadcastSignal({ type: 'offer', target: peerId, sdp: pc.localDescription, name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost });
+                        broadcastSignal({
+                            type: 'offer',
+                            target: peerId,
+                            sdp: pc.localDescription,
+                            name: state.displayName,
+                            timestamp: state.joinTimestamp,
+                            authHash: state.roomAuthHash,
+                            isHost: state.isHost,
+                            isCoHost: state.isCoHost
+                        });
                     }).catch(err => console.warn('Offer creation error:', err));
                 } else {
                     pc.ondatachannel = e => setupDataChannel(peerEntry, e.channel);
                 }
 
                 pc.onconnectionstatechange = () => {
-                    if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) removePeer(peerId);
+                    if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+                        removePeer(peerId);
+                    }
                 };
 
                 return peerEntry;
@@ -1064,7 +1286,7 @@
                     try {
                         const data = JSON.parse(e.data);
                         handleDataMessage(peerEntry, data);
-                    } catch(err) {}
+                    } catch (err) {}
                 };
             }
 
@@ -1077,10 +1299,16 @@
 
                     if (peerId === state.hostPeerId) {
                         let newHostId = state.localPeerId;
+                        let earliestTs = state.joinTimestamp;
                         state.peers.forEach((p, id) => {
-                            if (id < newHostId) newHostId = id;
+                            const pTs = p.joinTimestamp || Infinity;
+                            if (pTs < earliestTs || (pTs === earliestTs && id < newHostId)) {
+                                earliestTs = pTs;
+                                newHostId = id;
+                            }
                         });
                         state.hostPeerId = newHostId;
+                        state.hostTimestamp = earliestTs;
                         if (newHostId === state.localPeerId) {
                             state.isHost = true;
                             showToast('You are now the Room Host!');
@@ -1096,15 +1324,36 @@
             function broadcastDataMessage(payload) {
                 const str = JSON.stringify(payload);
                 state.peers.forEach(peer => {
-                    if (peer.dc && peer.dc.readyState === 'open') peer.dc.send(str);
+                    if (peer.dc && peer.dc.readyState === 'open') {
+                        peer.dc.send(str);
+                    }
                 });
             }
 
             function handleDataMessage(peerEntry, data) {
                 if (data.type === 'chat') {
                     appendChatMessage(peerEntry.name, data.text, false, data.time);
-                } else if (data.type === 'file') {
-                    appendFileMessage(peerEntry.name, data.fileName, data.fileData, data.fileType, false, data.time);
+                } else if (data.type === 'file-chunk') {
+                    let entry = peerEntry.fileBuffers.get(data.fileId);
+                    if (!entry) {
+                        entry = {
+                            chunks: new Array(data.totalChunks),
+                            received: 0,
+                            fileName: data.fileName,
+                            fileType: data.fileType,
+                            time: data.time
+                        };
+                        peerEntry.fileBuffers.set(data.fileId, entry);
+                    }
+                    if (!entry.chunks[data.index]) {
+                        entry.chunks[data.index] = data.chunk;
+                        entry.received++;
+                    }
+                    if (entry.received === data.totalChunks) {
+                        const fullDataUrl = entry.chunks.join('');
+                        peerEntry.fileBuffers.delete(data.fileId);
+                        appendFileMessage(peerEntry.name, entry.fileName, fullDataUrl, entry.fileType, false, entry.time);
+                    }
                 } else if (data.type === 'reaction') {
                     spawnFloatingEmoji(data.emoji);
                 } else if (data.type === 'hand') {
@@ -1128,13 +1377,13 @@
             });
 
             els.hostMuteAllBtn.addEventListener('click', () => {
-                broadcastSignal({ type: 'mute_all' });
+                broadcastSignal({ type: 'mute_all', authHash: state.roomAuthHash });
                 showToast('Sent mute command to all participants.');
                 els.hostModal.classList.add('hidden');
             });
 
             els.hostEndCallEveryoneBtn.addEventListener('click', () => {
-                broadcastSignal({ type: 'end_all' });
+                broadcastSignal({ type: 'end_all', authHash: state.roomAuthHash });
                 showToast('Ending call for everyone...');
                 setTimeout(leaveRoom, 1000);
             });
@@ -1142,8 +1391,10 @@
             // ---------------------------------------------------------
             // CONTROLS & MEDIA BUTTONS
             // ---------------------------------------------------------
-            startCallTimer();
             function startCallTimer() {
+                if (state.callTimerInterval) clearInterval(state.callTimerInterval);
+                state.callStartTime = Date.now();
+                els.callTimer.textContent = '00:00';
                 state.callTimerInterval = setInterval(() => {
                     const secs = Math.floor((Date.now() - state.callStartTime) / 1000);
                     els.callTimer.textContent = formatTime(secs);
@@ -1153,14 +1404,18 @@
             els.btnMic.addEventListener('click', () => {
                 state.micEnabled = !state.micEnabled;
                 if (state.localStream) state.localStream.getAudioTracks().forEach(t => t.enabled = state.micEnabled);
-                els.btnMic.className = state.micEnabled ? 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white' : 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white';
+                els.btnMic.className = state.micEnabled
+                    ? 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white'
+                    : 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white';
                 els.localMicIndicator.className = state.micEnabled ? 'w-2 h-2 rounded-full bg-emerald-400' : 'w-2 h-2 rounded-full bg-red-500';
             });
 
             els.btnCam.addEventListener('click', () => {
                 state.camEnabled = !state.camEnabled;
                 if (state.localStream) state.localStream.getVideoTracks().forEach(t => t.enabled = state.camEnabled);
-                els.btnCam.className = state.camEnabled ? 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white' : 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white';
+                els.btnCam.className = state.camEnabled
+                    ? 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white'
+                    : 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white';
                 els.localPlaceholder.classList.toggle('hidden', state.camEnabled);
             });
 
@@ -1174,10 +1429,12 @@
                             if (sender) sender.replaceTrack(track);
                         });
                         els.localVideo.srcObject = state.screenStream;
+                        els.localPlaceholder.classList.add('hidden');
                         state.isScreenSharing = true;
+                        updateLocalVideoMirror();
                         els.btnScreen.classList.add('bg-primary');
                         track.onended = () => stopScreenSharing();
-                    } catch(e) {
+                    } catch (e) {
                         showToast('Could not start screen sharing', 'error');
                     }
                 } else {
@@ -1186,16 +1443,21 @@
             });
 
             function stopScreenSharing() {
-                if (state.screenStream) state.screenStream.getTracks().forEach(t => t.stop());
+                if (state.screenStream) {
+                    state.screenStream.getTracks().forEach(t => t.stop());
+                    state.screenStream = null;
+                }
                 if (state.localStream) {
                     const track = state.localStream.getVideoTracks()[0];
                     state.peers.forEach(peer => {
                         const sender = peer.pc.getSenders().find(s => s.track && s.track.kind === 'video');
-                        if (sender) sender.replaceTrack(track);
+                        if (sender && track) sender.replaceTrack(track);
                     });
                     els.localVideo.srcObject = state.localStream;
+                    els.localPlaceholder.classList.toggle('hidden', state.camEnabled);
                 }
                 state.isScreenSharing = false;
+                updateLocalVideoMirror();
                 els.btnScreen.classList.remove('bg-primary');
             }
 
@@ -1237,7 +1499,9 @@
                 const el = document.createElement('div');
                 el.className = 'absolute bottom-16 left-1/2 transform -translate-x-1/2 text-3xl animate-bounce pointer-events-none transition-all duration-1000';
                 el.style.left = `${Math.random() * 70 + 15}%`;
-                el.innerHTML = `<span>${emoji}</span>`;
+                const span = document.createElement('span');
+                span.textContent = emoji;
+                el.appendChild(span);
                 els.reactionsLayer.appendChild(el);
                 setTimeout(() => el.remove(), 2500);
             }
@@ -1271,7 +1535,7 @@
                 els.chatTabContent.classList.add('hidden');
             });
 
-            // Chat & File form
+            // Chat & Chunked File form
             els.chatForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 const text = els.chatInput.value.trim();
@@ -1284,27 +1548,65 @@
 
             els.fileInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
+                els.fileInput.value = '';
                 if (!file) return;
+                if (file.size > MAX_FILE_SIZE) {
+                    showToast('File exceeds 10MB limit.', 'error');
+                    return;
+                }
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const fileData = event.target.result;
                     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     appendFileMessage('You', file.name, fileData, file.type, true, time);
-                    broadcastDataMessage({ type: 'file', fileName: file.name, fileData, fileType: file.type, time });
+
+                    const fileId = 'f_' + Math.random().toString(36).substring(2, 10);
+                    const totalChunks = Math.ceil(fileData.length / FILE_CHUNK_SIZE);
+                    for (let i = 0; i < totalChunks; i++) {
+                        const chunk = fileData.slice(i * FILE_CHUNK_SIZE, (i + 1) * FILE_CHUNK_SIZE);
+                        broadcastDataMessage({
+                            type: 'file-chunk',
+                            fileId,
+                            index: i,
+                            totalChunks,
+                            fileName: file.name,
+                            fileType: file.type,
+                            chunk,
+                            time
+                        });
+                    }
                 };
                 reader.readAsDataURL(file);
             });
 
+            function createMessageHeader(sender, time) {
+                const header = document.createElement('div');
+                header.className = 'flex items-center gap-1.5 mb-1 text-[10px] text-gray-400';
+
+                const senderSpan = document.createElement('span');
+                senderSpan.className = 'font-semibold text-gray-300';
+                senderSpan.textContent = sender;
+
+                const timeSpan = document.createElement('span');
+                timeSpan.textContent = time || '';
+
+                header.appendChild(senderSpan);
+                header.appendChild(timeSpan);
+                return header;
+            }
+
             function appendChatMessage(sender, text, isSelf, time) {
                 const msg = document.createElement('div');
                 msg.className = `flex flex-col ${isSelf ? 'items-end' : 'items-start'}`;
-                msg.innerHTML = `
-                    <div class="flex items-center gap-1.5 mb-1 text-[10px] text-gray-400">
-                        <span class="font-semibold text-gray-300">${sender}</span>
-                        <span>${time || ''}</span>
-                    </div>
-                    <div class="px-3.5 py-2 rounded-2xl max-w-[85%] text-xs ${isSelf ? 'bg-primary text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700'}">${text}</div>
-                `;
+
+                const bubble = document.createElement('div');
+                bubble.className = `px-3.5 py-2 rounded-2xl max-w-[85%] text-xs break-words ${
+                    isSelf ? 'bg-primary text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700'
+                }`;
+                bubble.textContent = text;
+
+                msg.appendChild(createMessageHeader(sender, time));
+                msg.appendChild(bubble);
                 els.chatMessages.appendChild(msg);
                 els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
 
@@ -1316,21 +1618,45 @@
             }
 
             function appendFileMessage(sender, fileName, fileData, fileType, isSelf, time) {
+                if (typeof fileData !== 'string' || !fileData.startsWith('data:')) return;
+
                 const msg = document.createElement('div');
                 msg.className = `flex flex-col ${isSelf ? 'items-end' : 'items-start'}`;
-                let contentHtml = `<a href="${fileData}" download="${fileName}" class="underline text-indigo-200 font-medium">📎 Download ${fileName}</a>`;
-                if (fileType.startsWith('image/')) {
-                    contentHtml = `<a href="${fileData}" target="_blank"><img src="${fileData}" class="max-w-[200px] rounded-lg mt-1 border border-white/10 object-cover"></a>`;
+
+                const bubble = document.createElement('div');
+                bubble.className = `px-3.5 py-2 rounded-2xl max-w-[85%] text-xs ${
+                    isSelf ? 'bg-primary text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700'
+                }`;
+
+                if (fileType && fileType.startsWith('image/')) {
+                    const link = document.createElement('a');
+                    link.href = fileData;
+                    link.download = fileName || 'image';
+                    const img = document.createElement('img');
+                    img.src = fileData;
+                    img.alt = fileName || 'Shared image';
+                    img.className = 'max-w-[200px] rounded-lg mt-1 border border-white/10 object-cover';
+                    link.appendChild(img);
+                    bubble.appendChild(link);
+                } else {
+                    const link = document.createElement('a');
+                    link.href = fileData;
+                    link.download = fileName || 'download';
+                    link.className = 'underline text-indigo-200 font-medium break-all';
+                    link.textContent = `📎 Download ${fileName || 'file'}`;
+                    bubble.appendChild(link);
                 }
-                msg.innerHTML = `
-                    <div class="flex items-center gap-1.5 mb-1 text-[10px] text-gray-400">
-                        <span class="font-semibold text-gray-300">${sender}</span>
-                        <span>${time || ''}</span>
-                    </div>
-                    <div class="px-3.5 py-2 rounded-2xl max-w-[85%] text-xs ${isSelf ? 'bg-primary text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700'}">${contentHtml}</div>
-                `;
+
+                msg.appendChild(createMessageHeader(sender, time));
+                msg.appendChild(bubble);
                 els.chatMessages.appendChild(msg);
                 els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+
+                if (!state.sidebarOpen && !isSelf) {
+                    state.unreadCount++;
+                    els.sidebarBadge.textContent = state.unreadCount;
+                    els.sidebarBadge.classList.remove('hidden');
+                }
             }
 
             function updateParticipantList() {
@@ -1338,58 +1664,103 @@
                 els.participantCountLabel.textContent = `${count} Participant${count === 1 ? '' : 's'}`;
                 els.participantTabCount.textContent = count;
 
-                els.participantsList.innerHTML = `
-                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs">
-                        <div class="flex items-center gap-2">
-                            <div class="w-7 h-7 rounded-full bg-primary/30 border border-primary/50 flex items-center justify-center font-bold text-primary">${getInitials(state.displayName)}</div>
-                            <span class="font-medium">${state.displayName} (You)</span>
-                        </div>
-                        <span class="text-[10px] text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-500/10">${state.isHost ? 'Host' : state.isCoHost ? 'Co-Host' : 'You'}</span>
-                    </div>
-                `;
+                els.participantsList.innerHTML = '';
 
+                // Local user row
+                const selfRow = document.createElement('div');
+                selfRow.className = 'flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs';
+
+                const selfLeft = document.createElement('div');
+                selfLeft.className = 'flex items-center gap-2';
+                const selfAvatar = document.createElement('div');
+                selfAvatar.className = 'w-7 h-7 rounded-full bg-primary/30 border border-primary/50 flex items-center justify-center font-bold text-primary';
+                selfAvatar.textContent = getInitials(state.displayName);
+                const selfName = document.createElement('span');
+                selfName.className = 'font-medium';
+                selfName.textContent = `${state.displayName} (You)`;
+                selfLeft.appendChild(selfAvatar);
+                selfLeft.appendChild(selfName);
+
+                const selfBadge = document.createElement('span');
+                selfBadge.className = 'text-[10px] text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-500/10';
+                selfBadge.textContent = state.isHost ? 'Host' : state.isCoHost ? 'Co-Host' : 'You';
+
+                selfRow.appendChild(selfLeft);
+                selfRow.appendChild(selfBadge);
+                els.participantsList.appendChild(selfRow);
+
+                // Remote peers
                 state.peers.forEach((peer, peerId) => {
                     const item = document.createElement('div');
                     item.className = 'flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs';
-                    
-                    let hostActionsHtml = '';
+
+                    const left = document.createElement('div');
+                    left.className = 'flex items-center gap-2';
+                    const avatar = document.createElement('div');
+                    avatar.className = 'w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center font-bold text-indigo-300';
+                    avatar.textContent = getInitials(peer.name);
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'font-medium';
+                    nameSpan.textContent = peer.name;
+                    left.appendChild(avatar);
+                    left.appendChild(nameSpan);
+
+                    const right = document.createElement('div');
+                    right.className = 'flex items-center gap-2';
+                    const roleTag = document.createElement('span');
+                    roleTag.className = 'text-[10px] text-indigo-400 font-semibold px-2 py-0.5 rounded bg-indigo-500/10';
+                    roleTag.textContent = peer.isHost ? 'Host' : peer.isCoHost ? 'Co-Host' : 'Peer';
+                    right.appendChild(roleTag);
+
                     if (state.isHost) {
-                        hostActionsHtml = `
-                            <div class="flex gap-1">
-                                <button type="button" class="px-2 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 text-[10px]" onclick="window.assignRole('${peerId}', 'co-host')">Co-Host</button>
-                                <button type="button" class="px-2 py-1 rounded bg-red-600/30 hover:bg-red-600 text-red-200 text-[10px]" onclick="window.kickPeer('${peerId}')">Kick</button>
-                            </div>
-                        `;
+                        const actions = document.createElement('div');
+                        actions.className = 'flex gap-1';
+
+                        const coHostBtn = document.createElement('button');
+                        coHostBtn.type = 'button';
+                        coHostBtn.className = 'px-2 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 text-[10px]';
+                        coHostBtn.textContent = 'Co-Host';
+                        coHostBtn.addEventListener('click', () => assignRole(peerId, 'co-host'));
+
+                        const kickBtn = document.createElement('button');
+                        kickBtn.type = 'button';
+                        kickBtn.className = 'px-2 py-1 rounded bg-red-600/30 hover:bg-red-600 text-red-200 text-[10px]';
+                        kickBtn.textContent = 'Kick';
+                        kickBtn.addEventListener('click', () => kickPeer(peerId));
+
+                        actions.appendChild(coHostBtn);
+                        actions.appendChild(kickBtn);
+                        right.appendChild(actions);
                     }
 
-                    item.innerHTML = `
-                        <div class="flex items-center gap-2">
-                            <div class="w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center font-bold text-indigo-300">${getInitials(peer.name)}</div>
-                            <span class="font-medium">${peer.name}</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] text-indigo-400 font-semibold px-2 py-0.5 rounded bg-indigo-500/10">${peer.isHost ? 'Host' : peer.isCoHost ? 'Co-Host' : 'Peer'}</span>
-                            ${hostActionsHtml}
-                        </div>
-                    `;
+                    item.appendChild(left);
+                    item.appendChild(right);
                     els.participantsList.appendChild(item);
                 });
             }
 
-            window.kickPeer = function(peerId) {
+            function kickPeer(peerId) {
                 if (!state.isHost) return;
-                broadcastSignal({ type: 'kick', target: peerId });
+                broadcastSignal({ type: 'kick', target: peerId, authHash: state.roomAuthHash });
                 removePeer(peerId);
                 showToast('Participant removed.');
-            };
+            }
 
-            window.assignRole = function(peerId, role) {
+            function assignRole(peerId, role) {
                 if (!state.isHost) return;
-                broadcastSignal({ type: 'set_role', target: peerId, role });
+                broadcastSignal({ type: 'set_role', target: peerId, role, authHash: state.roomAuthHash });
+                const peer = state.peers.get(peerId);
+                if (peer) {
+                    peer.isCoHost = role === 'co-host';
+                    updateParticipantList();
+                }
                 showToast(`Assigned ${role.toUpperCase()} to peer.`);
-            };
+            }
 
             function leaveRoom() {
+                if (state.roomId) {
+                    broadcastSignal({ type: 'bye', authHash: state.roomAuthHash });
+                }
                 if (state.localStream) state.localStream.getTracks().forEach(t => t.stop());
                 if (state.screenStream) state.screenStream.getTracks().forEach(t => t.stop());
                 if (state.bc) state.bc.close();
@@ -1397,6 +1768,12 @@
                 state.peers.forEach(peer => peer.pc.close());
                 window.location.reload();
             }
+
+            window.addEventListener('beforeunload', () => {
+                if (state.roomId) {
+                    broadcastSignal({ type: 'bye', authHash: state.roomAuthHash });
+                }
+            });
 
             els.btnLeaveCall.addEventListener('click', leaveRoom);
             els.headerLeaveRoomBtn.addEventListener('click', leaveRoom);
