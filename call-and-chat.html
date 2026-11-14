@@ -396,7 +396,7 @@
             const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
             const state = {
-                localPeerId: 'p_' + Math.random().toString(36).substring(2, 9),
+                localPeerId: 'p_' + Math.random().toString(36).substring(2, 9) + '_' + Math.floor(Math.random() * 10000),
                 joinTimestamp: Date.now(),
                 hostTimestamp: Date.now(),
                 displayName: localStorage.getItem('nexus_name') || ('User_' + Math.floor(100 + Math.random() * 900)),
