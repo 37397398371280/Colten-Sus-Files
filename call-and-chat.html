@@ -58,6 +58,7 @@
         </div>
 
         <div class="flex items-center gap-2">
+            <span id="signalStatusBadge" class="text-[10px] px-2 py-1 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 font-mono hidden sm:inline-block">Signal: Offline</span>
             <button id="hostSettingsHeaderBtn" class="hidden px-2.5 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-semibold transition-all flex items-center gap-1.5">
                 <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
                 <span class="hidden sm:inline">Host Panel</span>
@@ -370,12 +371,29 @@
             const ICE_SERVERS = {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun.relay.metered.ca:80' },
+                    {
+                        urls: 'turn:global.relay.metered.ca:80',
+                        username: 'e8dd65b92f62d3e36cab392b',
+                        credential: 'uWdWNmkhvyqTEAcO'
+                    },
+                    {
+                        urls: 'turn:global.relay.metered.ca:443?transport=tcp',
+                        username: 'e8dd65b92f62d3e36cab392b',
+                        credential: 'uWdWNmkhvyqTEAcO'
+                    }
+                ],
+                iceCandidatePoolSize: 10
             };
 
-            const FILE_CHUNK_SIZE = 16384; // 16KB safe WebRTC DataChannel chunk
-            const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB cap
+            const MQTT_BROKERS = [
+                'wss://broker.hivemq.com:8884/mqtt',
+                'wss://broker.emqx.io:8084/mqtt'
+            ];
+
+            const FILE_CHUNK_SIZE = 16384;
+            const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
             const state = {
                 localPeerId: 'p_' + Math.random().toString(36).substring(2, 9),
@@ -394,12 +412,14 @@
                 localStream: null,
                 screenStream: null,
                 useFacingMode: 'user',
-                peers: new Map(), // peerId -> { pc, dc, name, remoteStream, tileEl, videoEl, isHost, isCoHost, joinTimestamp, iceQueue, remoteDescSet, fileBuffers }
+                peers: new Map(),
                 bc: null,
                 presenceInterval: null,
                 statsInterval: null,
                 mqttWs: null,
                 mqttConnected: false,
+                mqttBrokerIndex: 0,
+                mqttReconnectTimer: null,
                 micEnabled: true,
                 camEnabled: true,
                 handRaised: false,
@@ -430,6 +450,7 @@
                 lobbyErrorText: $('lobbyErrorText'),
                 roomBadge: $('roomBadge'),
                 roleBadge: $('roleBadge'),
+                signalStatusBadge: $('signalStatusBadge'),
                 hostSettingsHeaderBtn: $('hostSettingsHeaderBtn'),
                 headerLeaveRoomBtn: $('headerLeaveRoomBtn'),
                 callTimer: $('callTimer'),
@@ -549,7 +570,7 @@
             });
 
             // ---------------------------------------------------------
-            // TOAST & UTILS (XSS-SAFE)
+            // TOAST & UTILS
             // ---------------------------------------------------------
             function showToast(message, type = 'info') {
                 const toast = document.createElement('div');
@@ -586,6 +607,13 @@
             function updateLocalVideoMirror() {
                 const shouldMirror = !state.isScreenSharing && state.useFacingMode === 'user';
                 els.localVideo.classList.toggle('mirrored', shouldMirror);
+            }
+
+            function updateSignalStatus(label, ok) {
+                els.signalStatusBadge.textContent = `Signal: ${label}`;
+                els.signalStatusBadge.className = ok
+                    ? 'text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono hidden sm:inline-block'
+                    : 'text-[10px] px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono hidden sm:inline-block';
             }
 
             // ---------------------------------------------------------
@@ -635,7 +663,7 @@
 
                     const details = document.createElement('div');
                     details.className = 'text-gray-400';
-                    details.textContent = `ICE: ${peer.pc.iceConnectionState} | RTT: ${rtt} | Lost: ${packetsLost} | RX: ${(bytesRecv / 1024).toFixed(0)} KB`;
+                    details.textContent = `ICE: ${peer.pc.iceConnectionState} | Sig: ${peer.pc.signalingState} | RTT: ${rtt} | Lost: ${packetsLost} | RX: ${(bytesRecv / 1024).toFixed(0)} KB`;
 
                     block.appendChild(title);
                     block.appendChild(details);
@@ -696,7 +724,7 @@
                     await populateDeviceList();
                 } catch (err) {
                     console.warn('Camera/Mic permission warning:', err);
-                    showToast('Camera/Mic unavailable or blocked.', 'error');
+                    showToast('Camera/Mic unavailable — joining in view-only mode.', 'error');
                     els.localPlaceholder.classList.remove('hidden');
                 }
             }
@@ -828,7 +856,6 @@
                 const secretMaterial = state.isProtected ? `protected:${roomId}:${password}` : `open:${roomId}`;
                 state.roomAuthHash = await sha256Hex(secretMaterial);
 
-                // Tentatively assume host until an older peer responds
                 state.isHost = true;
                 state.hostPeerId = state.localPeerId;
                 updateRoleUI();
@@ -848,14 +875,12 @@
                 startCallTimer();
                 state.statsInterval = setInterval(updateTelemetry, 2000);
 
-                setTimeout(() => {
-                    broadcastSignal({
-                        type: 'join-room',
-                        name: state.displayName,
-                        timestamp: state.joinTimestamp,
-                        authHash: state.roomAuthHash
-                    });
-                }, 300);
+                broadcastSignal({
+                    type: 'join-room',
+                    name: state.displayName,
+                    timestamp: state.joinTimestamp,
+                    authHash: state.roomAuthHash
+                });
 
                 showToast(`Joined room ${roomId} successfully!`);
             });
@@ -868,11 +893,16 @@
             function abortJoinToLobby(reason) {
                 if (state.localStream) state.localStream.getTracks().forEach(t => t.stop());
                 if (state.bc) { state.bc.close(); state.bc = null; }
+                if (state.mqttReconnectTimer) clearTimeout(state.mqttReconnectTimer);
                 if (state.mqttWs) { state.mqttWs.close(); state.mqttWs = null; }
                 if (state.presenceInterval) clearInterval(state.presenceInterval);
                 if (state.callTimerInterval) clearInterval(state.callTimerInterval);
                 if (state.statsInterval) clearInterval(state.statsInterval);
-                state.peers.forEach(p => { p.pc.close(); p.tileEl.remove(); });
+                state.peers.forEach(p => {
+                    if (p.retryTimer) clearTimeout(p.retryTimer);
+                    p.pc.close();
+                    p.tileEl.remove();
+                });
                 state.peers.clear();
                 state.roomId = '';
                 els.lobbyModal.classList.remove('hidden');
@@ -899,16 +929,17 @@
             }
 
             // ---------------------------------------------------------
-            // SIGNALING (BROADCAST CHANNEL & MQTT RELAY)
+            // SIGNALING (BROADCAST CHANNEL & DUAL MQTT RELAY)
             // ---------------------------------------------------------
             function initBroadcastChannel() {
                 if (window.BroadcastChannel) {
                     state.bc = new BroadcastChannel(`nexus-bc-${state.roomId}`);
                     state.bc.onmessage = (e) => handleSignalingMessage(e.data);
+                    updateSignalStatus('Local BC', true);
                 }
                 state.presenceInterval = setInterval(() => {
                     if (state.roomId) announcePresence();
-                }, 4000);
+                }, 3000);
             }
 
             function announcePresence() {
@@ -934,8 +965,12 @@
             }
 
             function connectMqttRelay() {
+                if (!state.roomId) return;
+                const brokerUrl = MQTT_BROKERS[state.mqttBrokerIndex % MQTT_BROKERS.length];
+                updateSignalStatus('Connecting...', false);
+
                 try {
-                    const ws = new WebSocket('wss://broker.hivemq.com:8884/mqtt', ['mqtt']);
+                    const ws = new WebSocket(brokerUrl, ['mqtt']);
                     ws.binaryType = 'arraybuffer';
                     state.mqttWs = ws;
 
@@ -949,6 +984,7 @@
                         const packetType = data[0] >> 4;
                         if (packetType === 2) {
                             state.mqttConnected = true;
+                            updateSignalStatus('Relay Online', true);
                             ws.send(buildMqttSubscribePacket(1, `nexusrtc/v1/${state.topicHash}`));
                             broadcastSignal({
                                 type: 'join-room',
@@ -968,10 +1004,22 @@
                         }
                     };
 
+                    ws.onerror = () => {
+                        ws.close();
+                    };
+
                     ws.onclose = () => {
                         state.mqttConnected = false;
+                        updateSignalStatus(state.bc ? 'Local Only' : 'Reconnecting...', !!state.bc);
+                        if (state.roomId) {
+                            state.mqttBrokerIndex++;
+                            state.mqttReconnectTimer = setTimeout(connectMqttRelay, 2500);
+                        }
                     };
-                } catch (e) {}
+                } catch (e) {
+                    state.mqttBrokerIndex++;
+                    state.mqttReconnectTimer = setTimeout(connectMqttRelay, 3000);
+                }
             }
 
             function encodeMqttRemainingLength(len) {
@@ -1029,7 +1077,7 @@
             }
 
             // ---------------------------------------------------------
-            // ROBUST WEBRTC PEER MESH & HANDSHAKE
+            // ROBUST WEBRTC PEER MESH & SELF-HEALING HANDSHAKE
             // ---------------------------------------------------------
             function adoptAuthoritativeHost(candidateHostId, candidateHostTs) {
                 if (!candidateHostId) return;
@@ -1045,9 +1093,32 @@
                 }
             }
 
+            async function sendOfferToPeer(peerEntry) {
+                if (!peerEntry || peerEntry.pc.signalingState !== 'stable') return;
+                try {
+                    if (!peerEntry.dc) {
+                        const dc = peerEntry.pc.createDataChannel('nexus_chat');
+                        setupDataChannel(peerEntry, dc);
+                    }
+                    const offer = await peerEntry.pc.createOffer();
+                    await peerEntry.pc.setLocalDescription(offer);
+                    broadcastSignal({
+                        type: 'offer',
+                        target: peerEntry.peerId,
+                        sdp: peerEntry.pc.localDescription,
+                        name: state.displayName,
+                        timestamp: state.joinTimestamp,
+                        authHash: state.roomAuthHash,
+                        isHost: state.isHost,
+                        isCoHost: state.isCoHost
+                    });
+                } catch (err) {
+                    console.warn('Offer creation error:', err);
+                }
+            }
+
             async function handleSignalingMessage(msg) {
                 if (!msg || msg.room !== state.roomId || msg.from === state.localPeerId) return;
-
                 if (msg.target && msg.target !== state.localPeerId) return;
 
                 if (msg.type === 'reject_join' || msg.type === 'auth_reject') {
@@ -1070,6 +1141,7 @@
                 }
 
                 const peerId = msg.from;
+                const shouldOffer = state.localPeerId > peerId;
 
                 if (msg.type === 'join-room') {
                     adoptAuthoritativeHost(peerId, msg.timestamp);
@@ -1085,32 +1157,37 @@
                         authHash: state.roomAuthHash
                     });
 
-                    if (!state.peers.has(peerId)) {
-                        const shouldOffer = state.localPeerId > peerId;
-                        getOrCreatePeer(peerId, msg.name, shouldOffer, false, false, msg.timestamp);
+                    const peer = getOrCreatePeer(peerId, msg.name, shouldOffer, false, false, msg.timestamp);
+                    if (shouldOffer && peer.pc.iceConnectionState === 'new') {
+                        await sendOfferToPeer(peer);
                     }
                 } else if (msg.type === 'room-state' || msg.type === 'presence-announce') {
                     adoptAuthoritativeHost(msg.hostPeerId, msg.hostTimestamp);
 
-                    if (!state.peers.has(peerId)) {
-                        const shouldOffer = state.localPeerId > peerId;
-                        getOrCreatePeer(peerId, msg.name || 'Peer', shouldOffer, msg.isHost, msg.isCoHost, msg.timestamp);
-                    } else {
-                        const peer = state.peers.get(peerId);
-                        if (peer) {
-                            if (msg.name) {
-                                peer.name = msg.name;
-                                peer.nametagSpan.textContent = msg.name;
-                            }
-                            peer.isHost = !!msg.isHost;
-                            peer.isCoHost = !!msg.isCoHost;
-                            if (msg.timestamp) peer.joinTimestamp = msg.timestamp;
-                            updateParticipantList();
-                        }
+                    const peer = getOrCreatePeer(peerId, msg.name || 'Peer', shouldOffer, msg.isHost, msg.isCoHost, msg.timestamp);
+                    if (msg.name) {
+                        peer.name = msg.name;
+                        peer.nametagSpan.textContent = msg.name;
+                    }
+                    peer.isHost = !!msg.isHost;
+                    peer.isCoHost = !!msg.isCoHost;
+                    if (msg.timestamp) peer.joinTimestamp = msg.timestamp;
+                    updateParticipantList();
+
+                    // Re-trigger offer if we are the offerer and ICE hasn't connected yet
+                    if (shouldOffer && ['new', 'disconnected'].includes(peer.pc.iceConnectionState)) {
+                        await sendOfferToPeer(peer);
                     }
                 } else if (msg.type === 'offer') {
                     const peer = getOrCreatePeer(peerId, msg.name || 'Peer', false, msg.isHost, msg.isCoHost, msg.timestamp);
-                    await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                    if (peer.pc.signalingState !== 'stable') {
+                        await Promise.all([
+                            peer.pc.setLocalDescription({ type: 'rollback' }),
+                            peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+                        ]).catch(() => {});
+                    } else {
+                        await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                    }
                     peer.remoteDescSet = true;
                     await flushIceQueue(peer);
                     const answer = await peer.pc.createAnswer();
@@ -1123,7 +1200,7 @@
                     });
                 } else if (msg.type === 'answer') {
                     const peer = state.peers.get(peerId);
-                    if (peer) {
+                    if (peer && peer.pc.signalingState === 'have-local-offer') {
                         await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
                         peer.remoteDescSet = true;
                         await flushIceQueue(peer);
@@ -1218,19 +1295,26 @@
                     remoteStream,
                     tileEl: tile,
                     videoEl: video,
+                    placeholderEl: placeholder,
+                    statusSpanEl: statusSpan,
                     nametagSpan,
                     isHost: !!isHost,
                     isCoHost: !!isCoHost,
                     joinTimestamp,
                     iceQueue: [],
                     remoteDescSet: false,
-                    fileBuffers: new Map()
+                    fileBuffers: new Map(),
+                    retryTimer: null
                 };
                 state.peers.set(peerId, peerEntry);
                 updateParticipantList();
 
-                if (state.localStream) {
+                // Attach local media tracks, or recvonly transceivers so SDP negotiation always succeeds
+                if (state.localStream && state.localStream.getTracks().length > 0) {
                     state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
+                } else {
+                    pc.addTransceiver('video', { direction: 'recvonly' });
+                    pc.addTransceiver('audio', { direction: 'recvonly' });
                 }
 
                 pc.onicecandidate = e => {
@@ -1252,27 +1336,40 @@
                     placeholder.classList.add('hidden');
                 };
 
+                pc.oniceconnectionstatechange = () => {
+                    const iceState = pc.iceConnectionState;
+                    if (iceState === 'connected' || iceState === 'completed') {
+                        statusSpan.textContent = 'Connected (Audio/No Video)';
+                        if (remoteStream.getVideoTracks().length > 0) {
+                            placeholder.classList.add('hidden');
+                        }
+                    } else if (iceState === 'checking') {
+                        statusSpan.textContent = 'Negotiating NAT...';
+                    } else if (iceState === 'failed') {
+                        statusSpan.textContent = 'ICE Failed — Retrying...';
+                        if (shouldOffer) {
+                            pc.restartIce();
+                            sendOfferToPeer(peerEntry);
+                        }
+                    } else if (iceState === 'closed') {
+                        removePeer(peerId);
+                    }
+                };
+
                 if (shouldOffer) {
-                    const dc = pc.createDataChannel('nexus_chat');
-                    setupDataChannel(peerEntry, dc);
-                    pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => {
-                        broadcastSignal({
-                            type: 'offer',
-                            target: peerId,
-                            sdp: pc.localDescription,
-                            name: state.displayName,
-                            timestamp: state.joinTimestamp,
-                            authHash: state.roomAuthHash,
-                            isHost: state.isHost,
-                            isCoHost: state.isCoHost
-                        });
-                    }).catch(err => console.warn('Offer creation error:', err));
+                    sendOfferToPeer(peerEntry);
+                    // Watchdog retry if stuck in connecting after 3.5 seconds
+                    peerEntry.retryTimer = setTimeout(() => {
+                        if (state.peers.has(peerId) && ['new', 'checking'].includes(pc.iceConnectionState)) {
+                            sendOfferToPeer(peerEntry);
+                        }
+                    }, 3500);
                 } else {
                     pc.ondatachannel = e => setupDataChannel(peerEntry, e.channel);
                 }
 
                 pc.onconnectionstatechange = () => {
-                    if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+                    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
                         removePeer(peerId);
                     }
                 };
@@ -1293,6 +1390,7 @@
             function removePeer(peerId) {
                 const peer = state.peers.get(peerId);
                 if (peer) {
+                    if (peer.retryTimer) clearTimeout(peer.retryTimer);
                     peer.pc.close();
                     peer.tileEl.remove();
                     state.peers.delete(peerId);
@@ -1666,7 +1764,6 @@
 
                 els.participantsList.innerHTML = '';
 
-                // Local user row
                 const selfRow = document.createElement('div');
                 selfRow.className = 'flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs';
 
@@ -1689,7 +1786,6 @@
                 selfRow.appendChild(selfBadge);
                 els.participantsList.appendChild(selfRow);
 
-                // Remote peers
                 state.peers.forEach((peer, peerId) => {
                     const item = document.createElement('div');
                     item.className = 'flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs';
