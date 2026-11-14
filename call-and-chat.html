@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NexusRTC — Mobile-Optimized Multi-Party WebRTC Video & Chat</title>
+    <title>NexusRTC — Pro Video Call, Chat & Host Controls</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -26,13 +26,13 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #070a12; color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
-        .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        body { font-family: 'Inter', sans-serif; background-color: #070a12; color: #f3f4f6; -webkit-tap-highlight-color: transparent; user-select: none; }
+        .glass { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 9999px; }
         .mirrored { transform: scaleX(-1); }
-        /* Mobile safe area padding utilities */
+        .draggable-box { touch-action: none; position: absolute; z-index: 50; }
         .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 1rem); }
         .safe-top { padding-top: env(safe-area-inset-top, 1rem); }
     </style>
@@ -52,15 +52,16 @@
                 <h1 class="font-bold text-sm sm:text-base tracking-tight flex items-center gap-2">
                     NexusRTC
                     <span id="roomBadge" class="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-mono">Room: Lobby</span>
+                    <span id="roleBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hidden font-bold">HOST</span>
                 </h1>
             </div>
         </div>
 
         <div class="flex items-center gap-2">
-            <div id="connectionStatusPill" class="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-gray-900 border border-gray-800 text-xs text-gray-400">
-                <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse"></span>
-                <span id="statusText">Connecting...</span>
-            </div>
+            <button id="hostSettingsHeaderBtn" class="hidden px-2.5 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-semibold transition-all flex items-center gap-1.5">
+                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">Host Panel</span>
+            </button>
             <button id="headerLeaveRoomBtn" class="px-3 py-1.5 rounded-lg bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600 hover:text-white text-xs font-semibold transition-all">
                 Leave
             </button>
@@ -126,14 +127,20 @@
                 <!-- FLOATING REACTIONS LAYER -->
                 <div id="reactionsLayer" class="absolute inset-0 pointer-events-none overflow-hidden z-20"></div>
 
-                <!-- FILTER PICKER POPUP -->
-                <div id="filterPicker" class="absolute bottom-20 left-1/2 transform -translate-x-1/2 glass rounded-2xl p-2 hidden flex flex-wrap gap-1.5 z-30 shadow-2xl max-w-xs justify-center">
-                    <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-primary text-white" data-filter="none">Normal</button>
-                    <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold hover:bg-gray-800 text-gray-300" data-filter="sepia(0.6) contrast(1.2)">Warm</button>
-                    <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold hover:bg-gray-800 text-gray-300" data-filter="grayscale(1) contrast(1.4)">Noir</button>
-                    <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold hover:bg-gray-800 text-gray-300" data-filter="invert(0.9) hue-rotate(180deg)">Invert</button>
-                    <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold hover:bg-gray-800 text-gray-300" data-filter="blur(3px)">Blur</button>
-                    <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold hover:bg-gray-800 text-gray-300" data-filter="brightness(1.4) saturate(1.5)">Bright</button>
+                <!-- MOVABLE FILTER PICKER POPUP -->
+                <div id="filterPickerBox" class="draggable-box bottom-20 left-1/2 transform -translate-x-1/2 glass rounded-2xl p-3 hidden shadow-2xl max-w-xs border border-gray-700">
+                    <div class="flex justify-between items-center mb-2 cursor-move drag-handle border-b border-gray-700 pb-1.5">
+                        <span class="text-xs font-bold text-indigo-300 flex items-center gap-1.5"><i data-lucide="wand-2" class="w-3.5 h-3.5"></i> Video Filters (Draggable)</span>
+                        <button type="button" id="closeFilterBox" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 justify-center">
+                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-primary text-white" data-filter="none">Normal</button>
+                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="sepia(0.6) contrast(1.2)">Warm</button>
+                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="grayscale(1) contrast(1.4)">Noir</button>
+                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="invert(0.9) hue-rotate(180deg)">Invert</button>
+                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="blur(3px)">Blur</button>
+                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="brightness(1.4) saturate(1.5)">Bright</button>
+                    </div>
                 </div>
 
                 <!-- REACTION EMOJI PICKER POPUP -->
@@ -152,6 +159,9 @@
                     </button>
                     <button id="btnCam" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Camera On/Off">
                         <i data-lucide="video" class="w-4 h-4 sm:w-5 sm:h-5" id="iconCam"></i>
+                    </button>
+                    <button id="btnFlipCam" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Flip Front/Rear Camera">
+                        <i data-lucide="switch-camera" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
                     <button id="btnScreen" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 hidden sm:flex items-center justify-center transition-all text-white" title="Share Screen">
                         <i data-lucide="monitor-up" class="w-4 h-4 sm:w-5 sm:h-5"></i>
@@ -180,7 +190,7 @@
             </div>
         </main>
 
-        <!-- SIDEBAR: CHAT, FILES & PARTICIPANTS (Mobile Drawer & Desktop Panel) -->
+        <!-- SIDEBAR: CHAT, FILES & PARTICIPANTS -->
         <aside id="sidebar" class="absolute md:relative inset-y-0 right-0 w-full sm:w-80 md:w-96 bg-darkSurface border-l border-gray-800 flex flex-col z-40 transform translate-x-full md:translate-x-0 transition-transform duration-300 shadow-2xl">
             <!-- Sidebar Header Tabs -->
             <div class="h-14 border-b border-gray-800 px-4 flex items-center justify-between shrink-0">
@@ -199,7 +209,6 @@
                     <div class="text-center text-[11px] text-gray-500 my-2">End-to-end peer encrypted room mesh.</div>
                 </div>
 
-                <!-- Chat Input Form with File Attachment -->
                 <form id="chatForm" class="p-2.5 sm:p-3 border-t border-gray-800 bg-darkBg/60 flex items-center gap-2 safe-bottom">
                     <label class="p-2 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-300 cursor-pointer transition-all flex items-center justify-center" title="Send File">
                         <i data-lucide="paperclip" class="w-4 h-4"></i>
@@ -212,27 +221,86 @@
                 </form>
             </div>
 
-            <!-- Tab Content 2: Participants & Device Settings -->
+            <!-- Tab Content 2: Participants & Movable Device Settings -->
             <div id="participantsTabContent" class="flex-1 flex flex-col min-h-0 hidden p-3 sm:p-4 overflow-y-auto space-y-4">
                 <div>
-                    <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Connected Participants</div>
+                    <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex justify-between items-center">
+                        <span>Connected Participants</span>
+                        <button type="button" id="openDeviceSettingsBoxBtn" class="text-primary hover:underline text-[10px]">⚙️ Open Device Box</button>
+                    </div>
                     <div id="participantsList" class="space-y-2"></div>
-                </div>
-
-                <div class="pt-3 border-t border-gray-800 space-y-3">
-                    <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Device Selectors</div>
-                    <div>
-                        <label class="block text-[10px] text-gray-400 mb-1">Camera</label>
-                        <select id="videoSourceSelect" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary"></select>
-                    </div>
-                    <div>
-                        <label class="block text-[10px] text-gray-400 mb-1">Microphone</label>
-                        <select id="audioSourceSelect" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary"></select>
-                    </div>
                 </div>
             </div>
         </aside>
 
+    </div>
+
+    <!-- MOVABLE DEVICE & CAMERA SETTINGS BOX -->
+    <div id="deviceSettingsBox" class="draggable-box top-20 left-10 w-80 glass rounded-2xl p-4 hidden shadow-2xl border border-gray-700">
+        <div class="flex justify-between items-center mb-3 cursor-move drag-handle border-b border-gray-700 pb-2">
+            <span class="text-xs font-bold text-indigo-300 flex items-center gap-1.5"><i data-lucide="settings" class="w-4 h-4"></i> Camera & Audio Settings (Draggable)</span>
+            <button type="button" id="closeDeviceBox" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+        <div class="space-y-3 text-xs">
+            <div>
+                <label class="block text-[10px] text-gray-400 mb-1">Camera Source</label>
+                <select id="videoSourceSelect" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-primary"></select>
+            </div>
+            <div>
+                <label class="block text-[10px] text-gray-400 mb-1">Microphone Source</label>
+                <select id="audioSourceSelect" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-primary"></select>
+            </div>
+            <button type="button" id="boxFlipCamBtn" class="w-full py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 font-semibold text-gray-200 flex items-center justify-center gap-2">
+                <i data-lucide="switch-camera" class="w-4 h-4"></i> Flip Front / Rear Camera
+            </button>
+        </div>
+    </div>
+
+    <!-- HOST SETTINGS MODAL -->
+    <div id="hostModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="w-full max-w-md glass rounded-3xl p-6 shadow-2xl border border-indigo-500/30 flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-300">
+                        <i data-lucide="shield" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base text-white">Host Control Center</h3>
+                        <p class="text-xs text-gray-400">Manage room access and participant permissions</p>
+                    </div>
+                </div>
+                <button type="button" id="closeHostModalBtn" class="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <div class="flex items-center justify-between p-3 rounded-xl bg-gray-900 border border-gray-800">
+                    <div>
+                        <div class="font-bold text-gray-200">Lock Room</div>
+                        <div class="text-[10px] text-gray-400">Prevent new participants from joining</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggleLockRoom" class="sr-only peer">
+                        <div class="w-9 h-5 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                </div>
+
+                <div class="flex items-center justify-between p-3 rounded-xl bg-gray-900 border border-gray-800">
+                    <div>
+                        <div class="font-bold text-gray-200">Mute All Participants</div>
+                        <div class="text-[10px] text-gray-400">Instantly mute incoming audio for all peers</div>
+                    </div>
+                    <button type="button" id="hostMuteAllBtn" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold">Mute All</button>
+                </div>
+
+                <div class="pt-2">
+                    <button type="button" id="hostEndCallEveryoneBtn" class="w-full py-3 rounded-xl bg-red-600/20 hover:bg-red-600 border border-red-500/40 text-red-300 hover:text-white font-semibold transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="power" class="w-4 h-4"></i> End Call for Everyone (End All)
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- MODAL: LOBBY & ROOM CREATION -->
@@ -244,7 +312,7 @@
                 </div>
                 <div>
                     <h2 class="text-lg sm:text-xl font-bold tracking-tight">NexusRTC Lobby</h2>
-                    <p class="text-xs text-gray-400">Mobile-ready P2P video & chat mesh</p>
+                    <p class="text-xs text-gray-400">Mobile-ready P2P video, chat & host tools</p>
                 </div>
             </div>
 
@@ -288,22 +356,6 @@
                 <span>Enter Room</span>
                 <i data-lucide="arrow-right" class="w-4 h-4"></i>
             </button>
-
-            <!-- Manual SDP Fallback Accordion -->
-            <details class="group pt-2 border-t border-gray-800">
-                <summary class="text-xs text-gray-400 cursor-pointer hover:text-white flex items-center justify-between">
-                    <span>Advanced: Manual SDP Token Fallback</span>
-                    <span class="group-open:rotate-180 transition-transform">▼</span>
-                </summary>
-                <div class="mt-3 space-y-2.5 pt-1 text-xs">
-                    <p class="text-gray-400">If firewalls block relays, exchange manual token strings:</p>
-                    <div class="flex gap-2">
-                        <button type="button" id="manualCreateOfferBtn" class="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200">1. Create Offer</button>
-                        <button type="button" id="manualAcceptAnswerBtn" class="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200">2. Accept Token</button>
-                    </div>
-                    <textarea id="manualSdpBox" class="w-full h-16 bg-gray-900 border border-gray-800 rounded-xl p-2 font-mono text-[10px] text-gray-300" placeholder="Paste SDP token..."></textarea>
-                </div>
-            </details>
         </div>
     </div>
 
@@ -313,7 +365,7 @@
             lucide.createIcons();
 
             // ---------------------------------------------------------
-            // STATE MANAGEMENT
+            // STATE & ROLES MANAGEMENT
             // ---------------------------------------------------------
             const ICE_SERVERS = {
                 iceServers: [
@@ -330,9 +382,14 @@
                 roomPassword: '',
                 roomAuthHash: '',
                 topicHash: '',
+                isHost: false,
+                isCoHost: false,
+                hostPeerId: '',
+                roomLocked: false,
                 localStream: null,
                 screenStream: null,
-                peers: new Map(), // peerId -> { pc, dc, name, stream, remoteVideoEl, ... }
+                useFacingMode: 'user', // 'user' or 'environment'
+                peers: new Map(), // peerId -> { pc, dc, name, stream, remoteVideoEl, role, isMuted }
                 bc: null,
                 mqttWs: null,
                 mqttConnected: false,
@@ -365,9 +422,8 @@
                 lobbyErrorBox: $('lobbyErrorBox'),
                 lobbyErrorText: $('lobbyErrorText'),
                 roomBadge: $('roomBadge'),
-                connectionStatusPill: $('connectionStatusPill'),
-                statusDot: $('statusDot'),
-                statusText: $('statusText'),
+                roleBadge: $('roleBadge'),
+                hostSettingsHeaderBtn: $('hostSettingsHeaderBtn'),
                 headerLeaveRoomBtn: $('headerLeaveRoomBtn'),
                 callTimer: $('callTimer'),
                 participantCountLabel: $('participantCountLabel'),
@@ -383,12 +439,15 @@
                 localMicIndicator: $('localMicIndicator'),
                 localAudioVisualizer: $('localAudioVisualizer'),
                 reactionsLayer: $('reactionsLayer'),
-                filterPicker: $('filterPicker'),
+                filterPickerBox: $('filterPickerBox'),
+                closeFilterBox: $('closeFilterBox'),
                 reactionPicker: $('reactionPicker'),
                 btnMic: $('btnMic'),
                 iconMic: $('iconMic'),
                 btnCam: $('btnCam'),
                 iconCam: $('iconCam'),
+                btnFlipCam: $('btnFlipCam'),
+                boxFlipCamBtn: $('boxFlipCamBtn'),
                 btnScreen: $('btnScreen'),
                 btnHand: $('btnHand'),
                 btnFilters: $('btnFilters'),
@@ -410,11 +469,79 @@
                 participantsList: $('participantsList'),
                 videoSourceSelect: $('videoSourceSelect'),
                 audioSourceSelect: $('audioSourceSelect'),
+                deviceSettingsBox: $('deviceSettingsBox'),
+                openDeviceSettingsBoxBtn: $('openDeviceSettingsBoxBtn'),
+                closeDeviceBox: $('closeDeviceBox'),
+                hostModal: $('hostModal'),
+                closeHostModalBtn: $('closeHostModalBtn'),
+                toggleLockRoom: $('toggleLockRoom'),
+                hostMuteAllBtn: $('hostMuteAllBtn'),
+                hostEndCallEveryoneBtn: $('hostEndCallEveryoneBtn'),
                 toastContainer: $('toastContainer')
             };
 
             // ---------------------------------------------------------
-            // TOAST & HELPER UTILS
+            // DRAGGABLE / MOVABLE BOXES LOGIC
+            // ---------------------------------------------------------
+            function makeDraggable(boxEl) {
+                let isDragging = false, startX, startY, initialX, initialY;
+                const handle = boxEl.querySelector('.drag-handle') || boxEl;
+
+                handle.addEventListener('mousedown', dragStart);
+                handle.addEventListener('touchstart', dragStart, { passive: false });
+
+                window.addEventListener('mousemove', drag);
+                window.addEventListener('touchmove', drag, { passive: false });
+
+                window.addEventListener('mouseup', dragEnd);
+                window.addEventListener('touchend', dragEnd);
+
+                function dragStart(e) {
+                    isDragging = true;
+                    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                    startX = clientX;
+                    startY = clientY;
+                    const rect = boxEl.getBoundingClientRect();
+                    boxEl.style.left = rect.left + 'px';
+                    boxEl.style.top = rect.top + 'px';
+                    boxEl.style.transform = 'none';
+                    initialX = rect.left;
+                    initialY = rect.top;
+                    if(e.type === 'touchstart') e.preventDefault();
+                }
+
+                function drag(e) {
+                    if (!isDragging) return;
+                    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                    const dx = clientX - startX;
+                    const dy = clientY - startY;
+                    boxEl.style.left = (initialX + dx) + 'px';
+                    boxEl.style.top = (initialY + dy) + 'px';
+                    if(e.type === 'touchmove') e.preventDefault();
+                }
+
+                function dragEnd() {
+                    isDragging = false;
+                }
+            }
+
+            makeDraggable(els.deviceSettingsBox);
+            makeDraggable(els.filterPickerBox);
+
+            els.openDeviceSettingsBoxBtn.addEventListener('click', () => {
+                els.deviceSettingsBox.classList.remove('hidden');
+            });
+            els.closeDeviceBox.addEventListener('click', () => {
+                els.deviceSettingsBox.classList.add('hidden');
+            });
+            els.closeFilterBox.addEventListener('click', () => {
+                els.filterPickerBox.classList.add('hidden');
+            });
+
+            // ---------------------------------------------------------
+            // TOAST & UTILS
             // ---------------------------------------------------------
             function showToast(message, type = 'info') {
                 const toast = document.createElement('div');
@@ -447,7 +574,7 @@
             }
 
             // ---------------------------------------------------------
-            // LOBBY & ROOM SETUP
+            // LOBBY SETUP
             // ---------------------------------------------------------
             els.inputDisplayName.value = state.displayName;
             const urlParams = new URLSearchParams(window.location.search);
@@ -477,24 +604,47 @@
             });
 
             // ---------------------------------------------------------
-            // MEDIA & DEVICES
+            // CAMERA, FLIPPING & DEVICES
             // ---------------------------------------------------------
-            async function initLocalCamera(constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: { echoCancellation: true, noiseSuppression: true } }) {
+            async function initLocalCamera(constraints = null) {
                 try {
                     if (state.localStream) {
                         state.localStream.getTracks().forEach(t => t.stop());
                     }
-                    state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    const defaultConstraints = {
+                        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: state.useFacingMode },
+                        audio: { echoCancellation: true, noiseSuppression: true }
+                    };
+                    state.localStream = await navigator.mediaDevices.getUserMedia(constraints || defaultConstraints);
                     els.localVideo.srcObject = state.localStream;
                     els.localPlaceholder.classList.add('hidden');
                     setupAudioVisualizer(state.localStream);
                     await populateDeviceList();
                 } catch (err) {
                     console.warn('Camera/Mic permission warning:', err);
-                    showToast('Camera/Mic unavailable. Audio-only mode active.', 'error');
+                    showToast('Camera/Mic unavailable or blocked.', 'error');
                     els.localPlaceholder.classList.remove('hidden');
                 }
             }
+
+            async function flipCamera() {
+                state.useFacingMode = state.useFacingMode === 'user' ? 'environment' : 'user';
+                await initLocalCamera({
+                    video: { facingMode: { exact: state.useFacingMode } },
+                    audio: true
+                }).catch(async () => {
+                    // Fallback if exact facingMode constraint is unsupported
+                    await initLocalCamera({
+                        video: { facingMode: state.useFacingMode },
+                        audio: true
+                    });
+                });
+                updatePeerTracks();
+                showToast(`Switched to ${state.useFacingMode === 'user' ? 'front' : 'rear'} camera`);
+            }
+
+            els.btnFlipCam.addEventListener('click', flipCamera);
+            els.boxFlipCamBtn.addEventListener('click', flipCamera);
 
             function setupAudioVisualizer(stream) {
                 try {
@@ -505,7 +655,6 @@
                     state.analyser.fftSize = 256;
                     source.connect(state.analyser);
                     state.audioDataArray = new Uint8Array(state.analyser.frequencyBinCount);
-                    
                     checkAudioVolume();
                 } catch(e) {}
             }
@@ -575,7 +724,7 @@
             }
 
             // ---------------------------------------------------------
-            // ROOM JOIN EXECUTION
+            // ROOM JOIN & HOST INITIALIZATION
             // ---------------------------------------------------------
             els.btnJoinRoom.addEventListener('click', async () => {
                 const name = els.inputDisplayName.value.trim();
@@ -595,8 +744,13 @@
                 const secretMaterial = state.isProtected ? `protected:${roomId}:${password}` : `open:${roomId}`;
                 state.roomAuthHash = await sha256Hex(secretMaterial);
 
+                // Initial Host assignment: First joiner is Host until proven otherwise
+                state.isHost = true;
+                state.hostPeerId = state.localPeerId;
+                updateRoleUI();
+
                 els.roomBadge.textContent = `Room: ${roomId}`;
-                els.localNameLabel.textContent = `${name} (You)`;
+                els.localNameLabel.textContent = `${name} (You - Host)`;
                 els.localAvatar.textContent = getInitials(name);
 
                 const newUrl = new URL(window.location.href);
@@ -618,14 +772,32 @@
                 els.lobbyErrorText.textContent = msg;
             }
 
+            function updateRoleUI() {
+                if (state.isHost) {
+                    els.roleBadge.textContent = 'HOST';
+                    els.roleBadge.classList.remove('hidden');
+                    els.hostSettingsHeaderBtn.classList.remove('hidden');
+                    els.localNameLabel.textContent = `${state.displayName} (You - Host)`;
+                } else if (state.isCoHost) {
+                    els.roleBadge.textContent = 'CO-HOST';
+                    els.roleBadge.classList.remove('hidden');
+                    els.hostSettingsHeaderBtn.classList.add('hidden');
+                    els.localNameLabel.textContent = `${state.displayName} (You - Co-Host)`;
+                } else {
+                    els.roleBadge.classList.add('hidden');
+                    els.hostSettingsHeaderBtn.classList.add('hidden');
+                    els.localNameLabel.textContent = `${state.displayName} (You)`;
+                }
+            }
+
             // ---------------------------------------------------------
-            // SIGNALING: BROADCAST CHANNEL & MQTT RELAY
+            // SIGNALING (BROADCAST CHANNEL & MQTT RELAY)
             // ---------------------------------------------------------
             function initBroadcastChannel() {
                 if (window.BroadcastChannel) {
                     state.bc = new BroadcastChannel(`nexus-bc-${state.roomId}`);
                     state.bc.onmessage = (e) => handleSignalingMessage(e.data);
-                    broadcastSignal({ type: 'hello', name: state.displayName, authHash: state.roomAuthHash });
+                    broadcastSignal({ type: 'hello', name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost });
                 }
             }
 
@@ -652,12 +824,8 @@
                         const data = new Uint8Array(event.data);
                         if ((data[0] >> 4) === 2) {
                             state.mqttConnected = true;
-                            els.statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
-                            els.statusText.textContent = 'Connected (Relay Active)';
-                            els.connectionStatusPill.classList.remove('hidden');
-
                             ws.send(buildMqttSubscribePacket(1, `nexusrtc/v1/${state.topicHash}`));
-                            broadcastSignal({ type: 'hello', name: state.displayName, authHash: state.roomAuthHash });
+                            broadcastSignal({ type: 'hello', name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost });
                         } else if ((data[0] >> 4) === 3) {
                             parseMqttPublish(data, (jsonStr) => {
                                 try {
@@ -668,11 +836,6 @@
                                 } catch(e) {}
                             });
                         }
-                    };
-
-                    ws.onerror = () => {
-                        els.statusDot.className = 'w-2.5 h-2.5 rounded-full bg-yellow-500';
-                        els.statusText.textContent = 'Local Mesh Active';
                     };
                 } catch(e) {}
             }
@@ -719,32 +882,50 @@
             }
 
             // ---------------------------------------------------------
-            // WEBRTC PEER MESH
+            // WEBRTC PEER MESH & HOST MIGRATION PROTOCOL
             // ---------------------------------------------------------
             async function handleSignalingMessage(msg) {
                 if (!msg || msg.room !== state.roomId || msg.from === state.localPeerId) return;
 
+                if (state.roomLocked && msg.type === 'hello') {
+                    broadcastSignal({ type: 'reject_join', target: msg.from, reason: 'Room is locked by Host' });
+                    return;
+                }
+
+                if (msg.type === 'reject_join' && msg.target === state.localPeerId) {
+                    showToast('Room access denied: Room is locked.', 'error');
+                    leaveRoom();
+                    return;
+                }
+
                 if (msg.authHash !== state.roomAuthHash) {
                     if (msg.type === 'hello') {
-                        broadcastSignal({ type: 'auth_reject', target: msg.from, reason: 'Password or Room Mode Mismatch' });
+                        broadcastSignal({ type: 'auth_reject', target: msg.from, reason: 'Password Mismatch' });
                     }
                     return;
                 }
 
                 if (msg.type === 'auth_reject' && msg.target === state.localPeerId) {
                     showToast('Connection rejected: Room password mismatch.', 'error');
+                    leaveRoom();
                     return;
                 }
 
                 const peerId = msg.from;
 
                 if (msg.type === 'hello') {
-                    broadcastSignal({ type: 'welcome', name: state.displayName, authHash: state.roomAuthHash });
-                    if (state.localPeerId > peerId) getOrCreatePeer(peerId, msg.name, true);
+                    // If we are host, broadcast our host status
+                    broadcastSignal({ type: 'welcome', name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost, hostPeerId: state.hostPeerId });
+                    if (state.localPeerId > peerId) getOrCreatePeer(peerId, msg.name, true, msg.isHost, msg.isCoHost);
                 } else if (msg.type === 'welcome') {
-                    getOrCreatePeer(peerId, msg.name, false);
+                    const peer = getOrCreatePeer(peerId, msg.name, false, msg.isHost, msg.isCoHost);
+                    if (msg.hostPeerId && msg.hostPeerId < state.hostPeerId) {
+                        state.hostPeerId = msg.hostPeerId;
+                        state.isHost = (state.localPeerId === state.hostPeerId);
+                        updateRoleUI();
+                    }
                 } else if (msg.type === 'offer') {
-                    const peer = getOrCreatePeer(peerId, msg.name, false);
+                    const peer = getOrCreatePeer(peerId, msg.name, false, msg.isHost, msg.isCoHost);
                     await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
                     const answer = await peer.pc.createAnswer();
                     await peer.pc.setLocalDescription(answer);
@@ -759,10 +940,30 @@
                     }
                 } else if (msg.type === 'bye') {
                     removePeer(peerId);
+                } else if (msg.type === 'end_all') {
+                    showToast('Host ended the call for everyone.', 'error');
+                    setTimeout(leaveRoom, 1500);
+                } else if (msg.type === 'kick' && msg.target === state.localPeerId) {
+                    showToast('You were removed from the room by the host.', 'error');
+                    setTimeout(leaveRoom, 1500);
+                } else if (msg.type === 'mute_all') {
+                    if (!state.isHost && !state.isCoHost) {
+                        state.micEnabled = false;
+                        if (state.localStream) state.localStream.getAudioTracks().forEach(t => t.enabled = false);
+                        els.btnMic.className = 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white';
+                        els.localMicIndicator.className = 'w-2 h-2 rounded-full bg-red-500';
+                        showToast('Host muted all participants.');
+                    }
+                } else if (msg.type === 'set_role' && msg.target === state.localPeerId) {
+                    state.isHost = msg.role === 'host';
+                    state.isCoHost = msg.role === 'co-host';
+                    if (state.isHost) state.hostPeerId = state.localPeerId;
+                    updateRoleUI();
+                    showToast(`You are now assigned as ${msg.role.toUpperCase()}`);
                 }
             }
 
-            function getOrCreatePeer(peerId, peerName = 'Peer', shouldOffer = false) {
+            function getOrCreatePeer(peerId, peerName = 'Peer', shouldOffer = false, isHost = false, isCoHost = false) {
                 if (state.peers.has(peerId)) return state.peers.get(peerId);
 
                 const pc = new RTCPeerConnection(ICE_SERVERS);
@@ -794,7 +995,7 @@
 
                 els.videoGrid.appendChild(tile);
 
-                const peerEntry = { peerId, name: peerName, pc, dc: null, remoteStream, tileEl: tile, videoEl: video };
+                const peerEntry = { peerId, name: peerName, pc, dc: null, remoteStream, tileEl: tile, videoEl: video, isHost, isCoHost };
                 state.peers.set(peerId, peerEntry);
                 updateParticipantList();
 
@@ -815,7 +1016,7 @@
                     const dc = pc.createDataChannel('nexus_chat');
                     setupDataChannel(peerEntry, dc);
                     pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => {
-                        broadcastSignal({ type: 'offer', sdp: pc.localDescription, name: state.displayName, authHash: state.roomAuthHash });
+                        broadcastSignal({ type: 'offer', sdp: pc.localDescription, name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost });
                     });
                 } else {
                     pc.ondatachannel = e => setupDataChannel(peerEntry, e.channel);
@@ -844,6 +1045,21 @@
                     peer.pc.close();
                     peer.tileEl.remove();
                     state.peers.delete(peerId);
+
+                    // Automatic Host Migration: If departed peer was the host, pick next longest connected peer (lexicographically smallest peerId)
+                    if (peerId === state.hostPeerId) {
+                        let newHostId = state.localPeerId;
+                        state.peers.forEach((p, id) => {
+                            if (id < newHostId) newHostId = id;
+                        });
+                        state.hostPeerId = newHostId;
+                        if (newHostId === state.localPeerId) {
+                            state.isHost = true;
+                            showToast('You are now the Room Host!');
+                        }
+                        updateRoleUI();
+                    }
+
                     updateParticipantList();
                     showToast(`${peer.name} left the room.`);
                 }
@@ -869,8 +1085,36 @@
             }
 
             // ---------------------------------------------------------
-            // CONTROLS & SIDEBAR TOGGLES
+            // HOST ACTIONS & UI
             // ---------------------------------------------------------
+            els.hostSettingsHeaderBtn.addEventListener('click', () => {
+                els.hostModal.classList.remove('hidden');
+            });
+            els.closeHostModalBtn.addEventListener('click', () => {
+                els.hostModal.classList.add('hidden');
+            });
+
+            els.toggleLockRoom.addEventListener('change', (e) => {
+                state.roomLocked = e.target.checked;
+                showToast(state.roomLocked ? 'Room locked. New joins blocked.' : 'Room unlocked.');
+            });
+
+            els.hostMuteAllBtn.addEventListener('click', () => {
+                broadcastSignal({ type: 'mute_all' });
+                showToast('Sent mute command to all participants.');
+                els.hostModal.classList.add('hidden');
+            });
+
+            els.hostEndCallEveryoneBtn.addEventListener('click', () => {
+                broadcastSignal({ type: 'end_all' });
+                showToast('Ending call for everyone...');
+                setTimeout(leaveRoom, 1000);
+            });
+
+            // ---------------------------------------------------------
+            // CONTROLS & MEDIA BUTTONS
+            // ---------------------------------------------------------
+            startCallTimer();
             function startCallTimer() {
                 state.callTimerInterval = setInterval(() => {
                     const secs = Math.floor((Date.now() - state.callStartTime) / 1000);
@@ -935,7 +1179,7 @@
             });
 
             els.btnFilters.addEventListener('click', () => {
-                els.filterPicker.classList.toggle('hidden');
+                els.filterPickerBox.classList.toggle('hidden');
                 els.reactionPicker.classList.add('hidden');
             });
 
@@ -943,13 +1187,13 @@
                 btn.addEventListener('click', (e) => {
                     const filter = e.target.getAttribute('data-filter');
                     els.localVideo.style.filter = filter === 'none' ? '' : filter;
-                    els.filterPicker.classList.add('hidden');
+                    els.filterPickerBox.classList.add('hidden');
                 });
             });
 
             els.btnReactions.addEventListener('click', () => {
                 els.reactionPicker.classList.toggle('hidden');
-                els.filterPicker.classList.add('hidden');
+                els.filterPickerBox.classList.add('hidden');
             });
 
             document.querySelectorAll('.reaction-emoji').forEach(btn => {
@@ -1072,23 +1316,51 @@
                             <div class="w-7 h-7 rounded-full bg-primary/30 border border-primary/50 flex items-center justify-center font-bold text-primary">${getInitials(state.displayName)}</div>
                             <span class="font-medium">${state.displayName} (You)</span>
                         </div>
-                        <span class="text-[10px] text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-500/10">Host</span>
+                        <span class="text-[10px] text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-500/10">${state.isHost ? 'Host' : state.isCoHost ? 'Co-Host' : 'You'}</span>
                     </div>
                 `;
 
-                state.peers.forEach((peer) => {
+                state.peers.forEach((peer, peerId) => {
                     const item = document.createElement('div');
                     item.className = 'flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs';
+                    
+                    let hostActionsHtml = '';
+                    if (state.isHost) {
+                        hostActionsHtml = `
+                            <div class="flex gap-1">
+                                <button type="button" class="px-2 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 text-[10px]" onclick="window.assignRole('${peerId}', 'co-host')">Co-Host</button>
+                                <button type="button" class="px-2 py-1 rounded bg-red-600/30 hover:bg-red-600 text-red-200 text-[10px]" onclick="window.kickPeer('${peerId}')">Kick</button>
+                            </div>
+                        `;
+                    }
+
                     item.innerHTML = `
                         <div class="flex items-center gap-2">
                             <div class="w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center font-bold text-indigo-300">${getInitials(peer.name)}</div>
                             <span class="font-medium">${peer.name}</span>
                         </div>
-                        <span class="text-[10px] text-indigo-400 font-semibold px-2 py-0.5 rounded bg-indigo-500/10">Peer</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] text-indigo-400 font-semibold px-2 py-0.5 rounded bg-indigo-500/10">${peer.isHost ? 'Host' : peer.isCoHost ? 'Co-Host' : 'Peer'}</span>
+                            ${hostActionsHtml}
+                        </div>
                     `;
                     els.participantsList.appendChild(item);
                 });
             }
+
+            // Expose global helper methods for inline participant list buttons
+            window.kickPeer = function(peerId) {
+                if (!state.isHost) return;
+                broadcastSignal({ type: 'kick', target: peerId });
+                removePeer(peerId);
+                showToast('Participant removed.');
+            };
+
+            window.assignRole = function(peerId, role) {
+                if (!state.isHost) return;
+                broadcastSignal({ type: 'set_role', target: peerId, role });
+                showToast(`Assigned ${role.toUpperCase()} to peer.`);
+            };
 
             function leaveRoom() {
                 if (state.localStream) state.localStream.getTracks().forEach(t => t.stop());
@@ -1101,56 +1373,6 @@
 
             els.btnLeaveCall.addEventListener('click', leaveRoom);
             els.headerLeaveRoomBtn.addEventListener('click', leaveRoom);
-
-            // Telemetry drawer
-            els.toggleStatsBtn.addEventListener('click', () => {
-                els.telemetryDrawer.classList.toggle('hidden');
-                updateTelemetryStats();
-            });
-
-            async function updateTelemetryStats() {
-                if (els.telemetryDrawer.classList.contains('hidden')) return;
-                els.telemetryPeerCount.textContent = `${state.peers.size} Peers`;
-                if (state.peers.size === 0) {
-                    els.telemetryContent.textContent = 'No active remote peers.';
-                    return;
-                }
-                let html = '';
-                for (const [id, peer] of state.peers.entries()) {
-                    let statsText = 'Gathering stats...';
-                    try {
-                        const stats = await peer.pc.getStats();
-                        stats.forEach(r => {
-                            if (r.type === 'inbound-rtp' && r.kind === 'video') {
-                                statsText = `${Math.round((r.bytesReceived * 8) / 1000)} kbps | Lost: ${r.packetsLost || 0}`;
-                            }
-                        });
-                    } catch(e) {}
-                    html += `<div class="p-2 rounded bg-gray-900 border border-gray-800 mb-1"><div class="text-indigo-300 font-bold">${peer.name}</div><div>${statsText}</div></div>`;
-                }
-                els.telemetryContent.innerHTML = html;
-            }
-            setInterval(updateTelemetryStats, 2500);
-
-            // Manual SDP hooks
-            $('manualCreateOfferBtn').addEventListener('click', async () => {
-                const tempPc = new RTCPeerConnection(ICE_SERVERS);
-                const offer = await tempPc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
-                await tempPc.setLocalDescription(offer);
-                $('manualSdpBox').value = JSON.stringify(tempPc.localDescription);
-                showToast('Manual offer token created.');
-            });
-
-            $('manualAcceptAnswerBtn').addEventListener('click', () => {
-                try {
-                    const parsed = JSON.parse($('manualSdpBox').value);
-                    showToast('SDP token loaded.');
-                } catch(e) {
-                    showToast('Invalid SDP token JSON', 'error');
-                }
-            });
-
-            updateParticipantList();
         });
     </script>
 </body>
