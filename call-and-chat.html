@@ -633,7 +633,6 @@
                     video: { facingMode: { exact: state.useFacingMode } },
                     audio: true
                 }).catch(async () => {
-                    // Fallback if exact facingMode constraint is unsupported
                     await initLocalCamera({
                         video: { facingMode: state.useFacingMode },
                         audio: true
@@ -797,8 +796,16 @@
                 if (window.BroadcastChannel) {
                     state.bc = new BroadcastChannel(`nexus-bc-${state.roomId}`);
                     state.bc.onmessage = (e) => handleSignalingMessage(e.data);
-                    broadcastSignal({ type: 'hello', name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost });
+                    // Announce presence immediately & periodically so existing peers notice us
+                    announcePresence();
+                    setInterval(() => {
+                        if (state.roomId) announcePresence();
+                    }, 5000);
                 }
+            }
+
+            function announcePresence() {
+                broadcastSignal({ type: 'presence-announce', name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost });
             }
 
             function broadcastSignal(payload) {
@@ -825,7 +832,7 @@
                         if ((data[0] >> 4) === 2) {
                             state.mqttConnected = true;
                             ws.send(buildMqttSubscribePacket(1, `nexusrtc/v1/${state.topicHash}`));
-                            broadcastSignal({ type: 'hello', name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost });
+                            announcePresence();
                         } else if ((data[0] >> 4) === 3) {
                             parseMqttPublish(data, (jsonStr) => {
                                 try {
@@ -882,12 +889,12 @@
             }
 
             // ---------------------------------------------------------
-            // WEBRTC PEER MESH & HOST MIGRATION PROTOCOL
+            // ROBUST WEBRTC PEER MESH & HANDSHAKE
             // ---------------------------------------------------------
             async function handleSignalingMessage(msg) {
                 if (!msg || msg.room !== state.roomId || msg.from === state.localPeerId) return;
 
-                if (state.roomLocked && msg.type === 'hello') {
+                if (state.roomLocked && msg.type === 'presence-announce') {
                     broadcastSignal({ type: 'reject_join', target: msg.from, reason: 'Room is locked by Host' });
                     return;
                 }
@@ -899,7 +906,7 @@
                 }
 
                 if (msg.authHash !== state.roomAuthHash) {
-                    if (msg.type === 'hello') {
+                    if (msg.type === 'presence-announce') {
                         broadcastSignal({ type: 'auth_reject', target: msg.from, reason: 'Password Mismatch' });
                     }
                     return;
@@ -913,19 +920,27 @@
 
                 const peerId = msg.from;
 
-                if (msg.type === 'hello') {
-                    // If we are host, broadcast our host status
+                if (msg.type === 'presence-announce') {
+                    // Always respond with welcome back & check if we should initiate an offer
                     broadcastSignal({ type: 'welcome', name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost, hostPeerId: state.hostPeerId });
-                    if (state.localPeerId > peerId) getOrCreatePeer(peerId, msg.name, true, msg.isHost, msg.isCoHost);
+                    
+                    // Bidirectional connection trigger: Compare peer IDs deterministically to avoid glare (lexicographical tie-breaker)
+                    if (!state.peers.has(peerId)) {
+                        const shouldOffer = state.localPeerId > peerId;
+                        getOrCreatePeer(peerId, msg.name, shouldOffer, msg.isHost, msg.isCoHost);
+                    }
                 } else if (msg.type === 'welcome') {
-                    const peer = getOrCreatePeer(peerId, msg.name, false, msg.isHost, msg.isCoHost);
+                    if (!state.peers.has(peerId)) {
+                        const shouldOffer = state.localPeerId > peerId;
+                        getOrCreatePeer(peerId, msg.name, shouldOffer, msg.isHost, msg.isCoHost);
+                    }
                     if (msg.hostPeerId && msg.hostPeerId < state.hostPeerId) {
                         state.hostPeerId = msg.hostPeerId;
                         state.isHost = (state.localPeerId === state.hostPeerId);
                         updateRoleUI();
                     }
                 } else if (msg.type === 'offer') {
-                    const peer = getOrCreatePeer(peerId, msg.name, false, msg.isHost, msg.isCoHost);
+                    const peer = getOrCreatePeer(peerId, msg.name || 'Peer', false, msg.isHost, msg.isCoHost);
                     await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
                     const answer = await peer.pc.createAnswer();
                     await peer.pc.setLocalDescription(answer);
@@ -1017,7 +1032,7 @@
                     setupDataChannel(peerEntry, dc);
                     pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => {
                         broadcastSignal({ type: 'offer', sdp: pc.localDescription, name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost });
-                    });
+                    }).catch(err => console.warn('Offer creation error:', err));
                 } else {
                     pc.ondatachannel = e => setupDataChannel(peerEntry, e.channel);
                 }
@@ -1046,7 +1061,6 @@
                     peer.tileEl.remove();
                     state.peers.delete(peerId);
 
-                    // Automatic Host Migration: If departed peer was the host, pick next longest connected peer (lexicographically smallest peerId)
                     if (peerId === state.hostPeerId) {
                         let newHostId = state.localPeerId;
                         state.peers.forEach((p, id) => {
@@ -1348,7 +1362,6 @@
                 });
             }
 
-            // Expose global helper methods for inline participant list buttons
             window.kickPeer = function(peerId) {
                 if (!state.isHost) return;
                 broadcastSignal({ type: 'kick', target: peerId });
