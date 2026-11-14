@@ -1,1406 +1,168 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NexusRTC — Pro Video Call, Chat & Host Controls</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        darkBg: '#070a12',
-                        darkSurface: '#0f172a',
-                        darkPanel: '#1e293b',
-                        primary: '#6366f1',
-                        primaryHover: '#4f46e5',
-                    }
-                }
-            }
-        }
-    </script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="logo.png">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #070a12; color: #f3f4f6; -webkit-tap-highlight-color: transparent; user-select: none; }
-        .glass { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 9999px; }
-        .mirrored { transform: scaleX(-1); }
-        .draggable-box { touch-action: none; position: absolute; z-index: 50; }
-        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 1rem); }
-        .safe-top { padding-top: env(safe-area-inset-top, 1rem); }
+        body {
+            text-align: center;
+            background-color: #f5f5f5;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-top: 40px;
+        }
+
+        p {
+            font-size: 18px;
+            color: #777;
+            max-width: 600px;
+            margin: 20px auto;
+        }
+
+        a {
+            color: #00bfff;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+
+        .loading-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f1f1f1;
+        }
+
+        .loading-spinner {
+            border: 8px solid #888;
+            border-top: 8px solid #00bfff;
+            border-radius: 50%;
+            width: 64px;
+            height: 64px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .files-section {
+            margin-top: 40px;
+        }
+
+        .files-section h2 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        .files-section .file-link {
+            display: block;
+            color: #555;
+            text-decoration: none;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .files-section .file-link:hover {
+            color: #00bfff;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding: 20px;
+            background-color: #333;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .footer p {
+            margin: 0;
+        }
+
+        .go-back-button {
+            padding: 10px 20px;
+            background-color: #00bfff;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+            text-decoration: none;
+        }
+
+        .go-back-button:hover {
+            background-color: #0099e6;
+        }
+
     </style>
+    <title>Colten Sus's Files Page</title>
 </head>
-<body class="h-[100dvh] w-screen overflow-hidden flex flex-col antialiased">
-
-    <!-- Toast Notification Container -->
-    <div id="toastContainer" class="fixed top-16 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none w-11/12 max-w-sm"></div>
-
-    <!-- HEADER / TOP NAV -->
-    <header class="h-14 px-3 sm:px-4 bg-darkBg/95 border-b border-gray-800 flex items-center justify-between shrink-0 z-30 safe-top">
-        <div class="flex items-center gap-2 sm:gap-3">
-            <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-primary to-emerald-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <i data-lucide="video" class="w-4 h-4 sm:w-5 sm:h-5 text-white"></i>
-            </div>
-            <div>
-                <h1 class="font-bold text-sm sm:text-base tracking-tight flex items-center gap-2">
-                    NexusRTC
-                    <span id="roomBadge" class="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-mono">Room: Lobby</span>
-                    <span id="roleBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hidden font-bold">HOST</span>
-                </h1>
-            </div>
-        </div>
-
-        <div class="flex items-center gap-2">
-            <button id="hostSettingsHeaderBtn" class="hidden px-2.5 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-semibold transition-all flex items-center gap-1.5">
-                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
-                <span class="hidden sm:inline">Host Panel</span>
-            </button>
-            <button id="headerLeaveRoomBtn" class="px-3 py-1.5 rounded-lg bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600 hover:text-white text-xs font-semibold transition-all">
-                Leave
-            </button>
-        </div>
-    </header>
-
-    <!-- MAIN APP WRAPPER -->
-    <div class="flex-1 flex flex-col md:flex-row relative overflow-hidden">
-
-        <!-- STAGE / VIDEO GRID AREA -->
-        <main class="flex-1 flex flex-col p-2 sm:p-3 relative overflow-hidden">
-            <div class="flex-1 rounded-2xl bg-black/70 border border-gray-800/80 shadow-2xl relative flex flex-col overflow-hidden p-2 sm:p-3">
-                
-                <!-- HUD Bar inside video stage -->
-                <div class="absolute top-3 left-3 right-3 z-20 flex justify-between items-center pointer-events-none">
-                    <div class="px-2.5 py-1 rounded-xl glass text-[11px] sm:text-xs font-medium flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
-                        <span id="callTimer" class="font-mono font-bold text-indigo-400">00:00</span>
-                        <span class="text-gray-600">•</span>
-                        <span id="participantCountLabel">1 Participant</span>
-                    </div>
-
-                    <div class="flex items-center gap-1.5 pointer-events-auto">
-                        <button id="toggleStatsBtn" class="p-2 sm:px-3 sm:py-1.5 rounded-xl glass text-xs font-medium hover:bg-gray-800 flex items-center gap-1.5 transition-all" title="Telemetry Stats">
-                            <i data-lucide="activity" class="w-3.5 h-3.5 text-emerald-400"></i>
-                            <span class="hidden sm:inline">Telemetry</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Telemetry Drawer -->
-                <div id="telemetryDrawer" class="absolute top-14 right-3 z-20 w-72 max-h-64 overflow-y-auto glass rounded-xl p-3 text-[11px] font-mono text-gray-300 hidden shadow-2xl">
-                    <div class="font-bold text-indigo-300 mb-2 border-b border-gray-700 pb-1 flex justify-between">
-                        <span>WebRTC Diagnostics</span>
-                        <span id="telemetryPeerCount">0 Peers</span>
-                    </div>
-                    <div id="telemetryContent" class="space-y-1.5">No active peer telemetry.</div>
-                </div>
-
-                <!-- DYNAMIC RESPONSIVE MESH VIDEO GRID -->
-                <div id="videoGrid" class="flex-1 grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 auto-rows-fr items-center justify-center overflow-y-auto p-1">
-                    
-                    <!-- Local Video Tile -->
-                    <div id="localTile" class="relative w-full h-full min-h-[180px] sm:min-h-[220px] rounded-xl overflow-hidden bg-gray-900 border-2 border-gray-800 flex items-center justify-center shadow-lg group">
-                        <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover mirrored"></video>
-                        
-                        <!-- Local Cam Off Placeholder -->
-                        <div id="localPlaceholder" class="absolute inset-0 bg-gradient-to-br from-gray-900 to-indigo-950 flex flex-col items-center justify-center gap-2 hidden">
-                            <div id="localAvatar" class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-indigo-600/30 border-2 border-indigo-500/50 flex items-center justify-center text-lg font-bold text-indigo-200">ME</div>
-                            <span class="text-xs text-gray-400 font-medium">Camera Off</span>
-                        </div>
-
-                        <!-- Audio Level Visualizer Ring Overlay -->
-                        <div id="localAudioVisualizer" class="absolute inset-0 border-2 border-emerald-500 rounded-xl opacity-0 pointer-events-none transition-opacity duration-150"></div>
-
-                        <!-- Name Tag & Mic Badge -->
-                        <div class="absolute bottom-2.5 left-2.5 px-2 py-1 rounded-lg bg-black/70 backdrop-blur-md border border-white/10 text-[11px] sm:text-xs font-medium flex items-center gap-1.5 z-10">
-                            <span id="localMicIndicator" class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                            <span id="localNameLabel">You (Host)</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- FLOATING REACTIONS LAYER -->
-                <div id="reactionsLayer" class="absolute inset-0 pointer-events-none overflow-hidden z-20"></div>
-
-                <!-- MOVABLE FILTER PICKER POPUP -->
-                <div id="filterPickerBox" class="draggable-box bottom-20 left-1/2 transform -translate-x-1/2 glass rounded-2xl p-3 hidden shadow-2xl max-w-xs border border-gray-700">
-                    <div class="flex justify-between items-center mb-2 cursor-move drag-handle border-b border-gray-700 pb-1.5">
-                        <span class="text-xs font-bold text-indigo-300 flex items-center gap-1.5"><i data-lucide="wand-2" class="w-3.5 h-3.5"></i> Video Filters (Draggable)</span>
-                        <button type="button" id="closeFilterBox" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
-                    </div>
-                    <div class="flex flex-wrap gap-1.5 justify-center">
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-primary text-white" data-filter="none">Normal</button>
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="sepia(0.6) contrast(1.2)">Warm</button>
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="grayscale(1) contrast(1.4)">Noir</button>
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="invert(0.9) hue-rotate(180deg)">Invert</button>
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="blur(3px)">Blur</button>
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="brightness(1.4) saturate(1.5)">Bright</button>
-                    </div>
-                </div>
-
-                <!-- REACTION EMOJI PICKER POPUP -->
-                <div id="reactionPicker" class="absolute bottom-20 left-1/2 transform -translate-x-1/2 glass rounded-full px-3 py-2 hidden flex gap-2 sm:gap-3 z-30 shadow-2xl">
-                    <button class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="👍">👍</button>
-                    <button class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="❤️">❤️</button>
-                    <button class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="😂">😂</button>
-                    <button class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="🎉">🎉</button>
-                    <button class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="🔥">🔥</button>
-                </div>
-
-                <!-- BOTTOM CONTROL DOCK (Touch Optimized) -->
-                <div class="absolute bottom-2.5 left-1/2 transform -translate-x-1/2 glass rounded-2xl px-3 py-2 flex items-center gap-1.5 sm:gap-2 z-30 shadow-2xl">
-                    <button id="btnMic" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Mute/Unmute Mic">
-                        <i data-lucide="mic" class="w-4 h-4 sm:w-5 sm:h-5" id="iconMic"></i>
-                    </button>
-                    <button id="btnCam" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Camera On/Off">
-                        <i data-lucide="video" class="w-4 h-4 sm:w-5 sm:h-5" id="iconCam"></i>
-                    </button>
-                    <button id="btnFlipCam" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Flip Front/Rear Camera">
-                        <i data-lucide="switch-camera" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                    </button>
-                    <button id="btnScreen" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 hidden sm:flex items-center justify-center transition-all text-white" title="Share Screen">
-                        <i data-lucide="monitor-up" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                    </button>
-                    <button id="btnHand" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Raise Hand">
-                        <i data-lucide="hand" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                    </button>
-                    <button id="btnFilters" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Video Filters">
-                        <i data-lucide="wand-2" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                    </button>
-                    <button id="btnReactions" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Reactions">
-                        <i data-lucide="smile" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                    </button>
-
-                    <div class="w-px h-5 bg-gray-700 mx-0.5"></div>
-
-                    <button id="btnToggleSidebar" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-primary hover:bg-primaryHover flex items-center justify-center transition-all text-white relative" title="Chat & Participants">
-                        <i data-lucide="message-square" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                        <span id="sidebarBadge" class="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center hidden">0</span>
-                    </button>
-                    <button id="btnLeaveCall" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white shadow-lg shadow-red-600/30" title="Leave">
-                        <i data-lucide="phone-off" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                    </button>
-                </div>
-
-            </div>
-        </main>
-
-        <!-- SIDEBAR: CHAT, FILES & PARTICIPANTS -->
-        <aside id="sidebar" class="absolute md:relative inset-y-0 right-0 w-full sm:w-80 md:w-96 bg-darkSurface border-l border-gray-800 flex flex-col z-40 transform translate-x-full md:translate-x-0 transition-transform duration-300 shadow-2xl">
-            <!-- Sidebar Header Tabs -->
-            <div class="h-14 border-b border-gray-800 px-4 flex items-center justify-between shrink-0">
-                <div class="flex bg-gray-900 p-1 rounded-xl border border-gray-800">
-                    <button id="tabChatBtn" class="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white transition-all">Chat & Files</button>
-                    <button id="tabParticipantsBtn" class="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">Peers (<span id="participantTabCount">1</span>)</button>
-                </div>
-                <button id="closeSidebarBtn" class="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-            </div>
-
-            <!-- Tab Content 1: Chat & File Sharing -->
-            <div id="chatTabContent" class="flex-1 flex flex-col min-h-0">
-                <div id="chatMessages" class="flex-1 p-3 sm:p-4 overflow-y-auto space-y-3 text-xs sm:text-sm">
-                    <div class="text-center text-[11px] text-gray-500 my-2">End-to-end peer encrypted room mesh.</div>
-                </div>
-
-                <form id="chatForm" class="p-2.5 sm:p-3 border-t border-gray-800 bg-darkBg/60 flex items-center gap-2 safe-bottom">
-                    <label class="p-2 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-300 cursor-pointer transition-all flex items-center justify-center" title="Send File">
-                        <i data-lucide="paperclip" class="w-4 h-4"></i>
-                        <input type="file" id="fileInput" class="hidden">
-                    </label>
-                    <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off" class="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary">
-                    <button type="submit" class="px-3 py-2 rounded-xl bg-primary hover:bg-primaryHover text-white text-xs font-semibold transition-all flex items-center justify-center">
-                        <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                    </button>
-                </form>
-            </div>
-
-            <!-- Tab Content 2: Participants & Movable Device Settings -->
-            <div id="participantsTabContent" class="flex-1 flex flex-col min-h-0 hidden p-3 sm:p-4 overflow-y-auto space-y-4">
-                <div>
-                    <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex justify-between items-center">
-                        <span>Connected Participants</span>
-                        <button type="button" id="openDeviceSettingsBoxBtn" class="text-primary hover:underline text-[10px]">⚙️ Open Device Box</button>
-                    </div>
-                    <div id="participantsList" class="space-y-2"></div>
-                </div>
-            </div>
-        </aside>
-
+<body>
+    <div class="loading-screen">
+        <div class="loading-spinner"></div>
     </div>
 
-    <!-- MOVABLE DEVICE & CAMERA SETTINGS BOX -->
-    <div id="deviceSettingsBox" class="draggable-box top-20 left-10 w-80 glass rounded-2xl p-4 hidden shadow-2xl border border-gray-700">
-        <div class="flex justify-between items-center mb-3 cursor-move drag-handle border-b border-gray-700 pb-2">
-            <span class="text-xs font-bold text-indigo-300 flex items-center gap-1.5"><i data-lucide="settings" class="w-4 h-4"></i> Camera & Audio Settings (Draggable)</span>
-            <button type="button" id="closeDeviceBox" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+    <div class="container">
+        <h1>Files</h1>
+        <p>Version Info: 1.5.8.1</p>
+
+        <div class="files-section">
+            <h2>Available Files:</h2>
+            <a class="file-link" href="The-Sweet-Tee-App-Test.html">The Sweet Tee App Test</a>
+            <a class="file-link" href="coltensus.repl.co.crt">coltensus.repl.co.crt</a>
+            <a class="file-link" href="mywebbrowser.html">My Web Browser ALPHA</a>
+
+          <a class="file-link" href="randomcatandkittenimageswebsitepage.html">Random Cat/Kitten Images Website Page</a>
+
+              <a href="https://www.roblox.com/users/1286599142/profile" class="file-link">My Main Roblox Account Profile (2nd)</a>
+
+              <a href="https://www.roblox.com/users/4186748365/profile" class="file-link">My Main Developer Roblox Account Profile (5nd)</a>   
+
+           <a href="https://translator-api-test.coltensus.com" class="file-link">Translator API Test</a>   
+
+          <a href="https://test-1-program.coltensus.com" class="file-link">Test 1 Program</a>  
+
+          <a href="https://short-links.coltensus.com" class="file-link">Short Links</a>
+          
         </div>
-        <div class="space-y-3 text-xs">
-            <div>
-                <label class="block text-[10px] text-gray-400 mb-1">Camera Source</label>
-                <select id="videoSourceSelect" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-primary"></select>
-            </div>
-            <div>
-                <label class="block text-[10px] text-gray-400 mb-1">Microphone Source</label>
-                <select id="audioSourceSelect" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-primary"></select>
-            </div>
-            <button type="button" id="boxFlipCamBtn" class="w-full py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 font-semibold text-gray-200 flex items-center justify-center gap-2">
-                <i data-lucide="switch-camera" class="w-4 h-4"></i> Flip Front / Rear Camera
-            </button>
-        </div>
+
+<br>
+      
+        <a class="go-back-button" href="https://coltensus.com/Version-Info.html">Go Back</a>
     </div>
 
-    <!-- HOST SETTINGS MODAL -->
-    <div id="hostModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
-        <div class="w-full max-w-md glass rounded-3xl p-6 shadow-2xl border border-indigo-500/30 flex flex-col gap-4">
-            <div class="flex items-center justify-between border-b border-gray-800 pb-3">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-300">
-                        <i data-lucide="shield" class="w-5 h-5"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-bold text-base text-white">Host Control Center</h3>
-                        <p class="text-xs text-gray-400">Manage room access and participant permissions</p>
-                    </div>
-                </div>
-                <button type="button" id="closeHostModalBtn" class="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-            </div>
+    <footer class="footer">
+      <center>
+        <p>&copy; 2023 Colten Sus. All rights reserved.</p>
+      </center>
+    </footer>
 
-            <div class="space-y-4 text-xs">
-                <div class="flex items-center justify-between p-3 rounded-xl bg-gray-900 border border-gray-800">
-                    <div>
-                        <div class="font-bold text-gray-200">Lock Room</div>
-                        <div class="text-[10px] text-gray-400">Prevent new participants from joining</div>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="toggleLockRoom" class="sr-only peer">
-                        <div class="w-9 h-5 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                    </label>
-                </div>
-
-                <div class="flex items-center justify-between p-3 rounded-xl bg-gray-900 border border-gray-800">
-                    <div>
-                        <div class="font-bold text-gray-200">Mute All Participants</div>
-                        <div class="text-[10px] text-gray-400">Instantly mute incoming audio for all peers</div>
-                    </div>
-                    <button type="button" id="hostMuteAllBtn" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold">Mute All</button>
-                </div>
-
-                <div class="pt-2">
-                    <button type="button" id="hostEndCallEveryoneBtn" class="w-full py-3 rounded-xl bg-red-600/20 hover:bg-red-600 border border-red-500/40 text-red-300 hover:text-white font-semibold transition-all flex items-center justify-center gap-2">
-                        <i data-lucide="power" class="w-4 h-4"></i> End Call for Everyone (End All)
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL: LOBBY & ROOM CREATION -->
-    <div id="lobbyModal" class="fixed inset-0 z-50 bg-darkBg/95 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-        <div class="w-full max-w-md glass rounded-3xl p-5 sm:p-8 shadow-2xl border border-gray-800 flex flex-col gap-5 my-auto">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-primary to-emerald-500 flex items-center justify-center shadow-xl shadow-indigo-500/30 shrink-0">
-                    <i data-lucide="video" class="w-6 h-6 text-white"></i>
-                </div>
-                <div>
-                    <h2 class="text-lg sm:text-xl font-bold tracking-tight">NexusRTC Lobby</h2>
-                    <p class="text-xs text-gray-400">Mobile-ready P2P video, chat & host tools</p>
-                </div>
-            </div>
-
-            <div id="lobbyErrorBox" class="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs hidden flex items-center gap-2">
-                <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
-                <span id="lobbyErrorText">Error message</span>
-            </div>
-
-            <div class="space-y-3.5">
-                <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">Your Name</label>
-                    <input type="text" id="inputDisplayName" maxlength="24" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-primary" placeholder="e.g. Taylor">
-                </div>
-
-                <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">Room ID</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="inputRoomId" maxlength="32" class="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-sm font-mono text-white uppercase focus:outline-none focus:border-primary" placeholder="NEXUS-1234">
-                        <button type="button" id="btnGenRoomId" class="px-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-xs font-semibold text-gray-300 transition-all flex items-center gap-1">
-                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-                            Random
-                        </button>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">Security Mode</label>
-                    <div class="grid grid-cols-2 gap-2 p-1 bg-gray-900 rounded-xl border border-gray-800">
-                        <button type="button" id="modeOpenBtn" class="py-2.5 rounded-lg text-xs font-semibold bg-primary text-white transition-all shadow">Open Room</button>
-                        <button type="button" id="modeProtectedBtn" class="py-2.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">Password Protected</button>
-                    </div>
-                </div>
-
-                <div id="passwordGroup" class="hidden">
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">Room Password</label>
-                    <input type="password" id="inputRoomPassword" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-primary" placeholder="Enter secure room password...">
-                </div>
-            </div>
-
-            <button type="button" id="btnJoinRoom" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-indigo-600 hover:from-primaryHover hover:to-indigo-500 text-white font-semibold text-sm transition-all shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2">
-                <span>Enter Room</span>
-                <i data-lucide="arrow-right" class="w-4 h-4"></i>
-            </button>
-        </div>
-    </div>
-
-    <!-- SCRIPT LOGIC -->
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
-
-            // ---------------------------------------------------------
-            // STATE & ROLES MANAGEMENT
-            // ---------------------------------------------------------
-            const ICE_SERVERS = {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            };
-
-            const state = {
-                localPeerId: 'p_' + Math.random().toString(36).substring(2, 9),
-                joinTimestamp: Date.now(),
-                displayName: localStorage.getItem('nexus_name') || ('User_' + Math.floor(100 + Math.random() * 900)),
-                roomId: '',
-                isProtected: false,
-                roomPassword: '',
-                roomAuthHash: '',
-                topicHash: '',
-                isHost: false, // Will be determined via handshake response
-                isCoHost: false,
-                hostPeerId: '',
-                roomLocked: false,
-                localStream: null,
-                screenStream: null,
-                useFacingMode: 'user', // 'user' or 'environment'
-                peers: new Map(), // peerId -> { pc, dc, name, stream, remoteVideoEl, role, isMuted }
-                bc: null,
-                mqttWs: null,
-                mqttConnected: false,
-                micEnabled: true,
-                camEnabled: true,
-                handRaised: false,
-                isScreenSharing: false,
-                callStartTime: Date.now(),
-                callTimerInterval: null,
-                unreadCount: 0,
-                sidebarOpen: false,
-                activeTab: 'chat',
-                audioContext: null,
-                analyser: null,
-                audioDataArray: null
-            };
-
-            const $ = id => document.getElementById(id);
-
-            const els = {
-                lobbyModal: $('lobbyModal'),
-                inputDisplayName: $('inputDisplayName'),
-                inputRoomId: $('inputRoomId'),
-                btnGenRoomId: $('btnGenRoomId'),
-                modeOpenBtn: $('modeOpenBtn'),
-                modeProtectedBtn: $('modeProtectedBtn'),
-                passwordGroup: $('passwordGroup'),
-                inputRoomPassword: $('inputRoomPassword'),
-                btnJoinRoom: $('btnJoinRoom'),
-                lobbyErrorBox: $('lobbyErrorBox'),
-                lobbyErrorText: $('lobbyErrorText'),
-                roomBadge: $('roomBadge'),
-                roleBadge: $('roleBadge'),
-                hostSettingsHeaderBtn: $('hostSettingsHeaderBtn'),
-                headerLeaveRoomBtn: $('headerLeaveRoomBtn'),
-                callTimer: $('callTimer'),
-                participantCountLabel: $('participantCountLabel'),
-                toggleStatsBtn: $('toggleStatsBtn'),
-                telemetryDrawer: $('telemetryDrawer'),
-                telemetryPeerCount: $('telemetryPeerCount'),
-                telemetryContent: $('telemetryContent'),
-                videoGrid: $('videoGrid'),
-                localVideo: $('localVideo'),
-                localPlaceholder: $('localPlaceholder'),
-                localAvatar: $('localAvatar'),
-                localNameLabel: $('localNameLabel'),
-                localMicIndicator: $('localMicIndicator'),
-                localAudioVisualizer: $('localAudioVisualizer'),
-                reactionsLayer: $('reactionsLayer'),
-                filterPickerBox: $('filterPickerBox'),
-                closeFilterBox: $('closeFilterBox'),
-                reactionPicker: $('reactionPicker'),
-                btnMic: $('btnMic'),
-                iconMic: $('iconMic'),
-                btnCam: $('btnCam'),
-                iconCam: $('iconCam'),
-                btnFlipCam: $('btnFlipCam'),
-                boxFlipCamBtn: $('boxFlipCamBtn'),
-                btnScreen: $('btnScreen'),
-                btnHand: $('btnHand'),
-                btnFilters: $('btnFilters'),
-                btnReactions: $('btnReactions'),
-                btnToggleSidebar: $('btnToggleSidebar'),
-                sidebarBadge: $('sidebarBadge'),
-                btnLeaveCall: $('btnLeaveCall'),
-                sidebar: $('sidebar'),
-                tabChatBtn: $('tabChatBtn'),
-                tabParticipantsBtn: $('tabParticipantsBtn'),
-                participantTabCount: $('participantTabCount'),
-                closeSidebarBtn: $('closeSidebarBtn'),
-                chatTabContent: $('chatTabContent'),
-                participantsTabContent: $('participantsTabContent'),
-                chatMessages: $('chatMessages'),
-                chatForm: $('chatForm'),
-                chatInput: $('chatInput'),
-                fileInput: $('fileInput'),
-                participantsList: $('participantsList'),
-                videoSourceSelect: $('videoSourceSelect'),
-                audioSourceSelect: $('audioSourceSelect'),
-                deviceSettingsBox: $('deviceSettingsBox'),
-                openDeviceSettingsBoxBtn: $('openDeviceSettingsBoxBtn'),
-                closeDeviceBox: $('closeDeviceBox'),
-                hostModal: $('hostModal'),
-                closeHostModalBtn: $('closeHostModalBtn'),
-                toggleLockRoom: $('toggleLockRoom'),
-                hostMuteAllBtn: $('hostMuteAllBtn'),
-                hostEndCallEveryoneBtn: $('hostEndCallEveryoneBtn'),
-                toastContainer: $('toastContainer')
-            };
-
-            // ---------------------------------------------------------
-            // DRAGGABLE / MOVABLE BOXES LOGIC
-            // ---------------------------------------------------------
-            function makeDraggable(boxEl) {
-                let isDragging = false, startX, startY, initialX, initialY;
-                const handle = boxEl.querySelector('.drag-handle') || boxEl;
-
-                handle.addEventListener('mousedown', dragStart);
-                handle.addEventListener('touchstart', dragStart, { passive: false });
-
-                window.addEventListener('mousemove', drag);
-                window.addEventListener('touchmove', drag, { passive: false });
-
-                window.addEventListener('mouseup', dragEnd);
-                window.addEventListener('touchend', dragEnd);
-
-                function dragStart(e) {
-                    isDragging = true;
-                    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-                    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-                    startX = clientX;
-                    startY = clientY;
-                    const rect = boxEl.getBoundingClientRect();
-                    boxEl.style.left = rect.left + 'px';
-                    boxEl.style.top = rect.top + 'px';
-                    boxEl.style.transform = 'none';
-                    initialX = rect.left;
-                    initialY = rect.top;
-                    if(e.type === 'touchstart') e.preventDefault();
-                }
-
-                function drag(e) {
-                    if (!isDragging) return;
-                    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-                    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-                    const dx = clientX - startX;
-                    const dy = clientY - startY;
-                    boxEl.style.left = (initialX + dx) + 'px';
-                    boxEl.style.top = (initialY + dy) + 'px';
-                    if(e.type === 'touchmove') e.preventDefault();
-                }
-
-                function dragEnd() {
-                    isDragging = false;
-                }
-            }
-
-            makeDraggable(els.deviceSettingsBox);
-            makeDraggable(els.filterPickerBox);
-
-            els.openDeviceSettingsBoxBtn.addEventListener('click', () => {
-                els.deviceSettingsBox.classList.remove('hidden');
-            });
-            els.closeDeviceBox.addEventListener('click', () => {
-                els.deviceSettingsBox.classList.add('hidden');
-            });
-            els.closeFilterBox.addEventListener('click', () => {
-                els.filterPickerBox.classList.add('hidden');
-            });
-
-            // ---------------------------------------------------------
-            // TOAST & UTILS
-            // ---------------------------------------------------------
-            function showToast(message, type = 'info') {
-                const toast = document.createElement('div');
-                toast.className = `px-3.5 py-2.5 rounded-xl text-xs font-semibold glass text-white shadow-xl pointer-events-auto transition-all animate-bounce flex items-center gap-2 border ${
-                    type === 'error' ? 'border-red-500/50 bg-red-950/90' : 'border-indigo-500/50 bg-gray-900/95'
-                }`;
-                toast.innerHTML = `<span>${message}</span>`;
-                els.toastContainer.appendChild(toast);
-                setTimeout(() => {
-                    toast.style.opacity = '0';
-                    setTimeout(() => toast.remove(), 300);
-                }, 3500);
-            }
-
-            function formatTime(secs) {
-                const m = Math.floor(secs / 60).toString().padStart(2, '0');
-                const s = (secs % 60).toString().padStart(2, '0');
-                return `${m}:${s}`;
-            }
-
-            async function sha256Hex(message) {
-                const msgBuffer = new TextEncoder().encode(message);
-                const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-                const hashArray = Array.from(new Uint8Array(hashBuffer));
-                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            }
-
-            function getInitials(name) {
-                return (name || 'U').substring(0, 2).toUpperCase();
-            }
-
-            // ---------------------------------------------------------
-            // LOBBY SETUP
-            // ---------------------------------------------------------
-            els.inputDisplayName.value = state.displayName;
-            const urlParams = new URLSearchParams(window.location.search);
-            const paramRoom = urlParams.get('room');
-            if (paramRoom) {
-                els.inputRoomId.value = paramRoom.toUpperCase();
-            } else {
-                els.inputRoomId.value = 'NEXUS-' + Math.floor(1000 + Math.random() * 9000);
-            }
-
-            els.btnGenRoomId.addEventListener('click', () => {
-                els.inputRoomId.value = 'NEXUS-' + Math.floor(1000 + Math.random() * 9000);
-            });
-
-            els.modeOpenBtn.addEventListener('click', () => {
-                state.isProtected = false;
-                els.modeOpenBtn.className = 'py-2.5 rounded-lg text-xs font-semibold bg-primary text-white transition-all shadow';
-                els.modeProtectedBtn.className = 'py-2.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all';
-                els.passwordGroup.classList.add('hidden');
-            });
-
-            els.modeProtectedBtn.addEventListener('click', () => {
-                state.isProtected = true;
-                els.modeProtectedBtn.className = 'py-2.5 rounded-lg text-xs font-semibold bg-primary text-white transition-all shadow';
-                els.modeOpenBtn.className = 'py-2.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all';
-                els.passwordGroup.classList.remove('hidden');
-            });
-
-            // ---------------------------------------------------------
-            // CAMERA, FLIPPING & DEVICES
-            // ---------------------------------------------------------
-            async function initLocalCamera(constraints = null) {
-                try {
-                    if (state.localStream) {
-                        state.localStream.getTracks().forEach(t => t.stop());
-                    }
-                    const defaultConstraints = {
-                        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: state.useFacingMode },
-                        audio: { echoCancellation: true, noiseSuppression: true }
-                    };
-                    state.localStream = await navigator.mediaDevices.getUserMedia(constraints || defaultConstraints);
-                    els.localVideo.srcObject = state.localStream;
-                    els.localPlaceholder.classList.add('hidden');
-                    setupAudioVisualizer(state.localStream);
-                    await populateDeviceList();
-                } catch (err) {
-                    console.warn('Camera/Mic permission warning:', err);
-                    showToast('Camera/Mic unavailable or blocked.', 'error');
-                    els.localPlaceholder.classList.remove('hidden');
-                }
-            }
-
-            async function flipCamera() {
-                state.useFacingMode = state.useFacingMode === 'user' ? 'environment' : 'user';
-                await initLocalCamera({
-                    video: { facingMode: { exact: state.useFacingMode } },
-                    audio: true
-                }).catch(async () => {
-                    await initLocalCamera({
-                        video: { facingMode: state.useFacingMode },
-                        audio: true
-                    });
-                });
-                updatePeerTracks();
-                showToast(`Switched to ${state.useFacingMode === 'user' ? 'front' : 'rear'} camera`);
-            }
-
-            els.btnFlipCam.addEventListener('click', flipCamera);
-            els.boxFlipCamBtn.addEventListener('click', flipCamera);
-
-            function setupAudioVisualizer(stream) {
-                try {
-                    if (!window.AudioContext && !window.webkitAudioContext) return;
-                    state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    const source = state.audioContext.createMediaStreamSource(stream);
-                    state.analyser = state.audioContext.createAnalyser();
-                    state.analyser.fftSize = 256;
-                    source.connect(state.analyser);
-                    state.audioDataArray = new Uint8Array(state.analyser.frequencyBinCount);
-                    checkAudioVolume();
-                } catch(e) {}
-            }
-
-            function checkAudioVolume() {
-                if (!state.analyser || !state.micEnabled) {
-                    if (els.localAudioVisualizer) els.localAudioVisualizer.style.opacity = '0';
-                    requestAnimationFrame(checkAudioVolume);
-                    return;
-                }
-                state.analyser.getByteFrequencyData(state.audioDataArray);
-                let sum = 0;
-                for (let i = 0; i < state.audioDataArray.length; i++) {
-                    sum += state.audioDataArray[i];
-                }
-                const avg = sum / state.audioDataArray.length;
-                if (avg > 15) {
-                    els.localAudioVisualizer.style.opacity = Math.min(1, avg / 60);
-                } else {
-                    els.localAudioVisualizer.style.opacity = '0';
-                }
-                requestAnimationFrame(checkAudioVolume);
-            }
-
-            async function populateDeviceList() {
-                try {
-                    const devices = await navigator.mediaDevices.enumerateDevices();
-                    els.videoSourceSelect.innerHTML = '';
-                    els.audioSourceSelect.innerHTML = '';
-                    devices.forEach(device => {
-                        const opt = document.createElement('option');
-                        opt.value = device.deviceId;
-                        opt.text = device.label || `${device.kind} (${device.deviceId.substring(0, 5)})`;
-                        if (device.kind === 'videoinput') els.videoSourceSelect.appendChild(opt);
-                        else if (device.kind === 'audioinput') els.audioSourceSelect.appendChild(opt);
-                    });
-                } catch(e) {}
-            }
-
-            els.videoSourceSelect.addEventListener('change', async () => {
-                const deviceId = els.videoSourceSelect.value;
-                await initLocalCamera({ video: { deviceId: { exact: deviceId } }, audio: true });
-                updatePeerTracks();
-            });
-
-            els.audioSourceSelect.addEventListener('change', async () => {
-                const deviceId = els.audioSourceSelect.value;
-                await initLocalCamera({ video: true, audio: { deviceId: { exact: deviceId } } });
-                updatePeerTracks();
-            });
-
-            function updatePeerTracks() {
-                if (!state.localStream) return;
-                const videoTrack = state.localStream.getVideoTracks()[0];
-                const audioTrack = state.localStream.getAudioTracks()[0];
-                state.peers.forEach(peer => {
-                    const senders = peer.pc.getSenders();
-                    if (videoTrack) {
-                        const vs = senders.find(s => s.track && s.track.kind === 'video');
-                        if (vs) vs.replaceTrack(videoTrack);
-                    }
-                    if (audioTrack) {
-                        const as = senders.find(s => s.track && s.track.kind === 'audio');
-                        if (as) as.replaceTrack(audioTrack);
-                    }
-                });
-            }
-
-            // ---------------------------------------------------------
-            // ROOM JOIN & HOST HANDSHAKE
-            // ---------------------------------------------------------
-            els.btnJoinRoom.addEventListener('click', async () => {
-                const name = els.inputDisplayName.value.trim();
-                const roomId = els.inputRoomId.value.trim().toUpperCase();
-                const password = els.inputRoomPassword.value;
-
-                if (!name) { showLobbyError('Please enter your display name.'); return; }
-                if (!roomId) { showLobbyError('Please enter a valid Room ID.'); return; }
-                if (state.isProtected && !password) { showLobbyError('Please enter the room password.'); return; }
-
-                state.displayName = name;
-                localStorage.setItem('nexus_name', name);
-                state.roomId = roomId;
-                state.roomPassword = password;
-
-                state.topicHash = await sha256Hex(`nexus-topic-${roomId}`);
-                const secretMaterial = state.isProtected ? `protected:${roomId}:${password}` : `open:${roomId}`;
-                state.roomAuthHash = await sha256Hex(secretMaterial);
-
-                // Initially assume we are host until room-state check reveals an existing host
-                state.isHost = true;
-                state.hostPeerId = state.localPeerId;
-                updateRoleUI();
-
-                els.roomBadge.textContent = `Room: ${roomId}`;
-                els.localNameLabel.textContent = `${name} (You - Host)`;
-                els.localAvatar.textContent = getInitials(name);
-
-                const newUrl = new URL(window.location.href);
-                newUrl.searchParams.set('room', roomId);
-                window.history.replaceState({}, '', newUrl.toString());
-
-                els.lobbyModal.classList.add('hidden');
-                await initLocalCamera();
-
-                initBroadcastChannel();
-                connectMqttRelay();
-                startCallTimer();
-
-                // Broadcast join request to discover existing peers and room state
-                setTimeout(() => {
-                    broadcastSignal({ type: 'join-room', name: state.displayName, timestamp: state.joinTimestamp, authHash: state.roomAuthHash });
-                }, 300);
-
-                showToast(`Joined room ${roomId} successfully!`);
-            });
-
-            function showLobbyError(msg) {
-                els.lobbyErrorBox.classList.remove('hidden');
-                els.lobbyErrorText.textContent = msg;
-            }
-
-            function updateRoleUI() {
-                if (state.isHost) {
-                    els.roleBadge.textContent = 'HOST';
-                    els.roleBadge.classList.remove('hidden');
-                    els.hostSettingsHeaderBtn.classList.remove('hidden');
-                    els.localNameLabel.textContent = `${state.displayName} (You - Host)`;
-                } else if (state.isCoHost) {
-                    els.roleBadge.textContent = 'CO-HOST';
-                    els.roleBadge.classList.remove('hidden');
-                    els.hostSettingsHeaderBtn.classList.add('hidden');
-                    els.localNameLabel.textContent = `${state.displayName} (You - Co-Host)`;
-                } else {
-                    els.roleBadge.classList.add('hidden');
-                    els.hostSettingsHeaderBtn.classList.add('hidden');
-                    els.localNameLabel.textContent = `${state.displayName} (You)`;
-                }
-            }
-
-            // ---------------------------------------------------------
-            // SIGNALING (BROADCAST CHANNEL & MQTT RELAY)
-            // ---------------------------------------------------------
-            function initBroadcastChannel() {
-                if (window.BroadcastChannel) {
-                    state.bc = new BroadcastChannel(`nexus-bc-${state.roomId}`);
-                    state.bc.onmessage = (e) => handleSignalingMessage(e.data);
-                    // Periodically announce presence
-                    setInterval(() => {
-                        if (state.roomId) announcePresence();
-                    }, 4000);
-                }
-            }
-
-            function announcePresence() {
-                broadcastSignal({ type: 'presence-announce', name: state.displayName, timestamp: state.joinTimestamp, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost, hostPeerId: state.hostPeerId });
-            }
-
-            function broadcastSignal(payload) {
-                const msg = { ...payload, from: state.localPeerId, room: state.roomId };
-                if (state.bc) state.bc.postMessage(msg);
-                if (state.mqttConnected && state.mqttWs && state.mqttWs.readyState === WebSocket.OPEN) {
-                    sendMqttMessage(msg);
-                }
-            }
-
-            function connectMqttRelay() {
-                try {
-                    const ws = new WebSocket('wss://broker.hivemq.com:8884/mqtt', ['mqtt']);
-                    ws.binaryType = 'arraybuffer';
-                    state.mqttWs = ws;
-
-                    ws.onopen = () => {
-                        const clientId = 'nexus_' + Math.random().toString(16).substring(2, 10);
-                        ws.send(buildMqttConnectPacket(clientId));
-                    };
-
-                    ws.onmessage = (event) => {
-                        const data = new Uint8Array(event.data);
-                        if ((data[0] >> 4) === 2) {
-                            state.mqttConnected = true;
-                            ws.send(buildMqttSubscribePacket(1, `nexusrtc/v1/${state.topicHash}`));
-                            announcePresence();
-                        } else if ((data[0] >> 4) === 3) {
-                            parseMqttPublish(data, (jsonStr) => {
-                                try {
-                                    const msg = JSON.parse(jsonStr);
-                                    if (msg.from !== state.localPeerId && msg.room === state.roomId) {
-                                        handleSignalingMessage(msg);
-                                    }
-                                } catch(e) {}
-                            });
-                        }
-                    };
-                } catch(e) {}
-            }
-
-            function sendMqttMessage(payloadObj) {
-                if (!state.mqttWs || state.mqttWs.readyState !== WebSocket.OPEN) return;
-                const topic = `nexusrtc/v1/${state.topicHash}`;
-                state.mqttWs.send(buildMqttPublishPacket(topic, JSON.stringify(payloadObj)));
-            }
-
-            function buildMqttConnectPacket(clientId) {
-                const proto = [0x00, 0x04, 0x4d, 0x51, 0x54, 0x54];
-                const flags = [0x04, 0x02, 0x00, 0x3c];
-                const cidBytes = new TextEncoder().encode(clientId);
-                const payload = [...proto, ...flags, cidBytes.length >> 8, cidBytes.length & 0xff, ...Array.from(cidBytes)];
-                return new Uint8Array([0x10, payload.length, ...payload]).buffer;
-            }
-
-            function buildMqttSubscribePacket(packetId, topic) {
-                const tBytes = new TextEncoder().encode(topic);
-                const payload = [packetId >> 8, packetId & 0xff, tBytes.length >> 8, tBytes.length & 0xff, ...Array.from(tBytes), 0x00];
-                return new Uint8Array([0x82, payload.length, ...payload]).buffer;
-            }
-
-            function buildMqttPublishPacket(topic, message) {
-                const tBytes = new TextEncoder().encode(topic);
-                const mBytes = new TextEncoder().encode(message);
-                const payload = [tBytes.length >> 8, tBytes.length & 0xff, ...Array.from(tBytes), ...Array.from(mBytes)];
-                const len = payload.length;
-                return new Uint8Array([0x30, len < 128 ? len : 128, ...payload]).buffer;
-            }
-
-            function parseMqttPublish(data, callback) {
-                let i = 1, multiplier = 1, remLen = 0, byte = 0;
-                do {
-                    if (i >= data.length) return;
-                    byte = data[i++];
-                    remLen += (byte & 127) * multiplier;
-                    multiplier *= 128;
-                } while ((byte & 128) !== 0);
-                const tLen = (data[i] << 8) + data[i+1];
-                i += 2 + tLen;
-                callback(new TextDecoder().decode(data.slice(i)));
-            }
-
-            // ---------------------------------------------------------
-            // ROBUST WEBRTC PEER MESH & HANDSHAKE
-            // ---------------------------------------------------------
-            async function handleSignalingMessage(msg) {
-                if (!msg || msg.room !== state.roomId || msg.from === state.localPeerId) return;
-
-                if (state.roomLocked && (msg.type === 'presence-announce' || msg.type === 'join-room')) {
-                    broadcastSignal({ type: 'reject_join', target: msg.from, reason: 'Room is locked by Host' });
-                    return;
-                }
-
-                if (msg.target && msg.target !== state.localPeerId) return;
-
-                if (msg.authHash !== state.roomAuthHash) {
-                    if (msg.type === 'presence-announce' || msg.type === 'join-room') {
-                        broadcastSignal({ type: 'auth_reject', target: msg.from, reason: 'Password Mismatch' });
-                    }
-                    return;
-                }
-
-                const peerId = msg.from;
-
-                if (msg.type === 'join-room') {
-                    // Respond with room state so new joiner knows who the host is
-                    broadcastSignal({
-                        type: 'room-state',
-                        target: peerId,
-                        hostPeerId: state.hostPeerId,
-                        isHost: state.isHost,
-                        isCoHost: state.isCoHost,
-                        name: state.displayName,
-                        timestamp: state.joinTimestamp
-                    });
-
-                    // Establish peer connection (deterministically offer if our ID > peerId)
-                    if (!state.peers.has(peerId)) {
-                        const shouldOffer = state.localPeerId > peerId;
-                        getOrCreatePeer(peerId, msg.name, shouldOffer, false, false);
-                    }
-                } else if (msg.type === 'room-state') {
-                    // If we thought we were host, but an older joiner or existing host exists, respect authoritative host
-                    if (msg.hostPeerId && msg.hostPeerId !== state.localPeerId) {
-                        if (msg.hostPeerId < state.hostPeerId || state.isHost) {
-                            state.hostPeerId = msg.hostPeerId;
-                            state.isHost = (state.localPeerId === state.hostPeerId);
-                            updateRoleUI();
-                        }
-                    }
-                    if (!state.peers.has(peerId)) {
-                        const shouldOffer = state.localPeerId > peerId;
-                        getOrCreatePeer(peerId, msg.name || 'Peer', shouldOffer, msg.isHost, msg.isCoHost);
-                    }
-                } else if (msg.type === 'presence-announce') {
-                    if (!state.peers.has(peerId)) {
-                        const shouldOffer = state.localPeerId > peerId;
-                        getOrCreatePeer(peerId, msg.name || 'Peer', shouldOffer, msg.isHost, msg.isCoHost);
-                    } else {
-                        const peer = state.peers.get(peerId);
-                        if (peer && msg.name) peer.name = msg.name;
-                    }
-                } else if (msg.type === 'offer') {
-                    const peer = getOrCreatePeer(peerId, msg.name || 'Peer', false, msg.isHost, msg.isCoHost);
-                    await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
-                    const answer = await peer.pc.createAnswer();
-                    await peer.pc.setLocalDescription(answer);
-                    broadcastSignal({ type: 'answer', target: peerId, sdp: peer.pc.localDescription, authHash: state.roomAuthHash });
-                } else if (msg.type === 'answer') {
-                    const peer = state.peers.get(peerId);
-                    if (peer) await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
-                } else if (msg.type === 'ice') {
-                    const peer = state.peers.get(peerId);
-                    if (peer && msg.candidate) {
-                        await peer.pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
-                    }
-                } else if (msg.type === 'bye') {
-                    removePeer(peerId);
-                } else if (msg.type === 'end_all') {
-                    showToast('Host ended the call for everyone.', 'error');
-                    setTimeout(leaveRoom, 1500);
-                } else if (msg.type === 'kick') {
-                    showToast('You were removed from the room by the host.', 'error');
-                    setTimeout(leaveRoom, 1500);
-                } else if (msg.type === 'mute_all') {
-                    if (!state.isHost && !state.isCoHost) {
-                        state.micEnabled = false;
-                        if (state.localStream) state.localStream.getAudioTracks().forEach(t => t.enabled = false);
-                        els.btnMic.className = 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white';
-                        els.localMicIndicator.className = 'w-2 h-2 rounded-full bg-red-500';
-                        showToast('Host muted all participants.');
-                    }
-                } else if (msg.type === 'set_role') {
-                    state.isHost = msg.role === 'host';
-                    state.isCoHost = msg.role === 'co-host';
-                    if (state.isHost) state.hostPeerId = state.localPeerId;
-                    updateRoleUI();
-                    showToast(`You are now assigned as ${msg.role.toUpperCase()}`);
-                }
-            }
-
-            function getOrCreatePeer(peerId, peerName = 'Peer', shouldOffer = false, isHost = false, isCoHost = false) {
-                if (state.peers.has(peerId)) return state.peers.get(peerId);
-
-                const pc = new RTCPeerConnection(ICE_SERVERS);
-                const remoteStream = new MediaStream();
-
-                const tile = document.createElement('div');
-                tile.className = 'relative w-full h-full min-h-[180px] sm:min-h-[220px] rounded-xl overflow-hidden bg-gray-900 border-2 border-gray-800 flex items-center justify-center shadow-lg group';
-                tile.id = `tile_${peerId}`;
-                
-                const video = document.createElement('video');
-                video.autoplay = true;
-                video.playsInline = true;
-                video.srcObject = remoteStream;
-                video.className = 'w-full h-full object-cover';
-                tile.appendChild(video);
-
-                const placeholder = document.createElement('div');
-                placeholder.className = 'absolute inset-0 bg-gradient-to-br from-gray-900 to-indigo-950 flex flex-col items-center justify-center gap-2';
-                placeholder.innerHTML = `
-                    <div class="w-14 h-14 rounded-full bg-emerald-600/30 border-2 border-emerald-500/50 flex items-center justify-center text-lg font-bold text-emerald-200">${getInitials(peerName)}</div>
-                    <span class="text-xs text-gray-400 font-medium">Connecting...</span>
-                `;
-                tile.appendChild(placeholder);
-
-                const nametag = document.createElement('div');
-                nametag.className = 'absolute bottom-2.5 left-2.5 px-2 py-1 rounded-lg bg-black/70 backdrop-blur-md border border-white/10 text-[11px] font-medium flex items-center gap-1.5 z-10';
-                nametag.innerHTML = `<span>${peerName}</span>`;
-                tile.appendChild(nametag);
-
-                els.videoGrid.appendChild(tile);
-
-                const peerEntry = { peerId, name: peerName, pc, dc: null, remoteStream, tileEl: tile, videoEl: video, isHost, isCoHost };
-                state.peers.set(peerId, peerEntry);
-                updateParticipantList();
-
-                if (state.localStream) {
-                    state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
-                }
-
-                pc.onicecandidate = e => {
-                    if (e.candidate) broadcastSignal({ type: 'ice', target: peerId, candidate: e.candidate, authHash: state.roomAuthHash });
-                };
-
-                pc.ontrack = e => {
-                    e.streams[0].getTracks().forEach(t => remoteStream.addTrack(t));
-                    placeholder.classList.add('hidden');
-                };
-
-                if (shouldOffer) {
-                    const dc = pc.createDataChannel('nexus_chat');
-                    setupDataChannel(peerEntry, dc);
-                    pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => {
-                        broadcastSignal({ type: 'offer', target: peerId, sdp: pc.localDescription, name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost });
-                    }).catch(err => console.warn('Offer creation error:', err));
-                } else {
-                    pc.ondatachannel = e => setupDataChannel(peerEntry, e.channel);
-                }
-
-                pc.onconnectionstatechange = () => {
-                    if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) removePeer(peerId);
-                };
-
-                return peerEntry;
-            }
-
-            function setupDataChannel(peerEntry, dc) {
-                peerEntry.dc = dc;
-                dc.onmessage = (e) => {
-                    try {
-                        const data = JSON.parse(e.data);
-                        handleDataMessage(peerEntry, data);
-                    } catch(err) {}
-                };
-            }
-
-            function removePeer(peerId) {
-                const peer = state.peers.get(peerId);
-                if (peer) {
-                    peer.pc.close();
-                    peer.tileEl.remove();
-                    state.peers.delete(peerId);
-
-                    if (peerId === state.hostPeerId) {
-                        let newHostId = state.localPeerId;
-                        state.peers.forEach((p, id) => {
-                            if (id < newHostId) newHostId = id;
-                        });
-                        state.hostPeerId = newHostId;
-                        if (newHostId === state.localPeerId) {
-                            state.isHost = true;
-                            showToast('You are now the Room Host!');
-                        }
-                        updateRoleUI();
-                    }
-
-                    updateParticipantList();
-                    showToast(`${peer.name} left the room.`);
-                }
-            }
-
-            function broadcastDataMessage(payload) {
-                const str = JSON.stringify(payload);
-                state.peers.forEach(peer => {
-                    if (peer.dc && peer.dc.readyState === 'open') peer.dc.send(str);
-                });
-            }
-
-            function handleDataMessage(peerEntry, data) {
-                if (data.type === 'chat') {
-                    appendChatMessage(peerEntry.name, data.text, false, data.time);
-                } else if (data.type === 'file') {
-                    appendFileMessage(peerEntry.name, data.fileName, data.fileData, data.fileType, false, data.time);
-                } else if (data.type === 'reaction') {
-                    spawnFloatingEmoji(data.emoji);
-                } else if (data.type === 'hand') {
-                    showToast(`${peerEntry.name} raised their hand ✋`);
-                }
-            }
-
-            // ---------------------------------------------------------
-            // HOST ACTIONS & UI
-            // ---------------------------------------------------------
-            els.hostSettingsHeaderBtn.addEventListener('click', () => {
-                els.hostModal.classList.remove('hidden');
-            });
-            els.closeHostModalBtn.addEventListener('click', () => {
-                els.hostModal.classList.add('hidden');
-            });
-
-            els.toggleLockRoom.addEventListener('change', (e) => {
-                state.roomLocked = e.target.checked;
-                showToast(state.roomLocked ? 'Room locked. New joins blocked.' : 'Room unlocked.');
-            });
-
-            els.hostMuteAllBtn.addEventListener('click', () => {
-                broadcastSignal({ type: 'mute_all' });
-                showToast('Sent mute command to all participants.');
-                els.hostModal.classList.add('hidden');
-            });
-
-            els.hostEndCallEveryoneBtn.addEventListener('click', () => {
-                broadcastSignal({ type: 'end_all' });
-                showToast('Ending call for everyone...');
-                setTimeout(leaveRoom, 1000);
-            });
-
-            // ---------------------------------------------------------
-            // CONTROLS & MEDIA BUTTONS
-            // ---------------------------------------------------------
-            startCallTimer();
-            function startCallTimer() {
-                state.callTimerInterval = setInterval(() => {
-                    const secs = Math.floor((Date.now() - state.callStartTime) / 1000);
-                    els.callTimer.textContent = formatTime(secs);
-                }, 1000);
-            }
-
-            els.btnMic.addEventListener('click', () => {
-                state.micEnabled = !state.micEnabled;
-                if (state.localStream) state.localStream.getAudioTracks().forEach(t => t.enabled = state.micEnabled);
-                els.btnMic.className = state.micEnabled ? 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white' : 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white';
-                els.localMicIndicator.className = state.micEnabled ? 'w-2 h-2 rounded-full bg-emerald-400' : 'w-2 h-2 rounded-full bg-red-500';
-            });
-
-            els.btnCam.addEventListener('click', () => {
-                state.camEnabled = !state.camEnabled;
-                if (state.localStream) state.localStream.getVideoTracks().forEach(t => t.enabled = state.camEnabled);
-                els.btnCam.className = state.camEnabled ? 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white' : 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white';
-                els.localPlaceholder.classList.toggle('hidden', state.camEnabled);
-            });
-
-            els.btnScreen.addEventListener('click', async () => {
-                if (!state.isScreenSharing) {
-                    try {
-                        state.screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                        const track = state.screenStream.getVideoTracks()[0];
-                        state.peers.forEach(peer => {
-                            const sender = peer.pc.getSenders().find(s => s.track && s.track.kind === 'video');
-                            if (sender) sender.replaceTrack(track);
-                        });
-                        els.localVideo.srcObject = state.screenStream;
-                        state.isScreenSharing = true;
-                        els.btnScreen.classList.add('bg-primary');
-                        track.onended = () => stopScreenSharing();
-                    } catch(e) {
-                        showToast('Could not start screen sharing', 'error');
-                    }
-                } else {
-                    stopScreenSharing();
-                }
-            });
-
-            function stopScreenSharing() {
-                if (state.screenStream) state.screenStream.getTracks().forEach(t => t.stop());
-                if (state.localStream) {
-                    const track = state.localStream.getVideoTracks()[0];
-                    state.peers.forEach(peer => {
-                        const sender = peer.pc.getSenders().find(s => s.track && s.track.kind === 'video');
-                        if (sender) sender.replaceTrack(track);
-                    });
-                    els.localVideo.srcObject = state.localStream;
-                }
-                state.isScreenSharing = false;
-                els.btnScreen.classList.remove('bg-primary');
-            }
-
-            els.btnHand.addEventListener('click', () => {
-                state.handRaised = !state.handRaised;
-                els.btnHand.classList.toggle('bg-primary', state.handRaised);
-                broadcastDataMessage({ type: 'hand' });
-                showToast(state.handRaised ? 'You raised your hand ✋' : 'You lowered your hand');
-            });
-
-            els.btnFilters.addEventListener('click', () => {
-                els.filterPickerBox.classList.toggle('hidden');
-                els.reactionPicker.classList.add('hidden');
-            });
-
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const filter = e.target.getAttribute('data-filter');
-                    els.localVideo.style.filter = filter === 'none' ? '' : filter;
-                    els.filterPickerBox.classList.add('hidden');
-                });
-            });
-
-            els.btnReactions.addEventListener('click', () => {
-                els.reactionPicker.classList.toggle('hidden');
-                els.filterPickerBox.classList.add('hidden');
-            });
-
-            document.querySelectorAll('.reaction-emoji').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const emoji = e.target.getAttribute('data-emoji');
-                    spawnFloatingEmoji(emoji);
-                    broadcastDataMessage({ type: 'reaction', emoji });
-                    els.reactionPicker.classList.add('hidden');
-                });
-            });
-
-            function spawnFloatingEmoji(emoji) {
-                const el = document.createElement('div');
-                el.className = 'absolute bottom-16 left-1/2 transform -translate-x-1/2 text-3xl animate-bounce pointer-events-none transition-all duration-1000';
-                el.style.left = `${Math.random() * 70 + 15}%`;
-                el.innerHTML = `<span>${emoji}</span>`;
-                els.reactionsLayer.appendChild(el);
-                setTimeout(() => el.remove(), 2500);
-            }
-
-            // Sidebar toggle & tabs
-            els.btnToggleSidebar.addEventListener('click', () => {
-                state.sidebarOpen = !state.sidebarOpen;
-                els.sidebar.classList.toggle('translate-x-full', !state.sidebarOpen);
-                if (state.sidebarOpen) {
-                    state.unreadCount = 0;
-                    els.sidebarBadge.classList.add('hidden');
-                }
-            });
-
-            els.closeSidebarBtn.addEventListener('click', () => {
-                state.sidebarOpen = false;
-                els.sidebar.classList.add('translate-x-full');
-            });
-
-            els.tabChatBtn.addEventListener('click', () => {
-                els.tabChatBtn.className = 'px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white transition-all';
-                els.tabParticipantsBtn.className = 'px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all';
-                els.chatTabContent.classList.remove('hidden');
-                els.participantsTabContent.classList.add('hidden');
-            });
-
-            els.tabParticipantsBtn.addEventListener('click', () => {
-                els.tabParticipantsBtn.className = 'px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white transition-all';
-                els.tabChatBtn.className = 'px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all';
-                els.participantsTabContent.classList.remove('hidden');
-                els.chatTabContent.classList.add('hidden');
-            });
-
-            // Chat & File form
-            els.chatForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const text = els.chatInput.value.trim();
-                if (!text) return;
-                const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                appendChatMessage('You', text, true, time);
-                broadcastDataMessage({ type: 'chat', text, time });
-                els.chatInput.value = '';
-            });
-
-            els.fileInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const fileData = event.target.result;
-                    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    appendFileMessage('You', file.name, fileData, file.type, true, time);
-                    broadcastDataMessage({ type: 'file', fileName: file.name, fileData, fileType: file.type, time });
-                };
-                reader.readAsDataURL(file);
-            });
-
-            function appendChatMessage(sender, text, isSelf, time) {
-                const msg = document.createElement('div');
-                msg.className = `flex flex-col ${isSelf ? 'items-end' : 'items-start'}`;
-                msg.innerHTML = `
-                    <div class="flex items-center gap-1.5 mb-1 text-[10px] text-gray-400">
-                        <span class="font-semibold text-gray-300">${sender}</span>
-                        <span>${time || ''}</span>
-                    </div>
-                    <div class="px-3.5 py-2 rounded-2xl max-w-[85%] text-xs ${isSelf ? 'bg-primary text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700'}">${text}</div>
-                `;
-                els.chatMessages.appendChild(msg);
-                els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
-
-                if (!state.sidebarOpen && !isSelf) {
-                    state.unreadCount++;
-                    els.sidebarBadge.textContent = state.unreadCount;
-                    els.sidebarBadge.classList.remove('hidden');
-                }
-            }
-
-            function appendFileMessage(sender, fileName, fileData, fileType, isSelf, time) {
-                const msg = document.createElement('div');
-                msg.className = `flex flex-col ${isSelf ? 'items-end' : 'items-start'}`;
-                let contentHtml = `<a href="${fileData}" download="${fileName}" class="underline text-indigo-200 font-medium">📎 Download ${fileName}</a>`;
-                if (fileType.startsWith('image/')) {
-                    contentHtml = `<a href="${fileData}" target="_blank"><img src="${fileData}" class="max-w-[200px] rounded-lg mt-1 border border-white/10 object-cover"></a>`;
-                }
-                msg.innerHTML = `
-                    <div class="flex items-center gap-1.5 mb-1 text-[10px] text-gray-400">
-                        <span class="font-semibold text-gray-300">${sender}</span>
-                        <span>${time || ''}</span>
-                    </div>
-                    <div class="px-3.5 py-2 rounded-2xl max-w-[85%] text-xs ${isSelf ? 'bg-primary text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700'}">${contentHtml}</div>
-                `;
-                els.chatMessages.appendChild(msg);
-                els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
-            }
-
-            function updateParticipantList() {
-                const count = 1 + state.peers.size;
-                els.participantCountLabel.textContent = `${count} Participant${count === 1 ? '' : 's'}`;
-                els.participantTabCount.textContent = count;
-
-                els.participantsList.innerHTML = `
-                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs">
-                        <div class="flex items-center gap-2">
-                            <div class="w-7 h-7 rounded-full bg-primary/30 border border-primary/50 flex items-center justify-center font-bold text-primary">${getInitials(state.displayName)}</div>
-                            <span class="font-medium">${state.displayName} (You)</span>
-                        </div>
-                        <span class="text-[10px] text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-500/10">${state.isHost ? 'Host' : state.isCoHost ? 'Co-Host' : 'You'}</span>
-                    </div>
-                `;
-
-                state.peers.forEach((peer, peerId) => {
-                    const item = document.createElement('div');
-                    item.className = 'flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs';
-                    
-                    let hostActionsHtml = '';
-                    if (state.isHost) {
-                        hostActionsHtml = `
-                            <div class="flex gap-1">
-                                <button type="button" class="px-2 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 text-[10px]" onclick="window.assignRole('${peerId}', 'co-host')">Co-Host</button>
-                                <button type="button" class="px-2 py-1 rounded bg-red-600/30 hover:bg-red-600 text-red-200 text-[10px]" onclick="window.kickPeer('${peerId}')">Kick</button>
-                            </div>
-                        `;
-                    }
-
-                    item.innerHTML = `
-                        <div class="flex items-center gap-2">
-                            <div class="w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center font-bold text-indigo-300">${getInitials(peer.name)}</div>
-                            <span class="font-medium">${peer.name}</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] text-indigo-400 font-semibold px-2 py-0.5 rounded bg-indigo-500/10">${peer.isHost ? 'Host' : peer.isCoHost ? 'Co-Host' : 'Peer'}</span>
-                            ${hostActionsHtml}
-                        </div>
-                    `;
-                    els.participantsList.appendChild(item);
-                });
-            }
-
-            window.kickPeer = function(peerId) {
-                if (!state.isHost) return;
-                broadcastSignal({ type: 'kick', target: peerId });
-                removePeer(peerId);
-                showToast('Participant removed.');
-            };
-
-            window.assignRole = function(peerId, role) {
-                if (!state.isHost) return;
-                broadcastSignal({ type: 'set_role', target: peerId, role });
-                showToast(`Assigned ${role.toUpperCase()} to peer.`);
-            };
-
-            function leaveRoom() {
-                if (state.localStream) state.localStream.getTracks().forEach(t => t.stop());
-                if (state.screenStream) state.screenStream.getTracks().forEach(t => t.stop());
-                if (state.bc) state.bc.close();
-                if (state.mqttWs) state.mqttWs.close();
-                state.peers.forEach(peer => peer.pc.close());
-                window.location.reload();
-            }
-
-            els.btnLeaveCall.addEventListener('click', leaveRoom);
-            els.headerLeaveRoomBtn.addEventListener('click', leaveRoom);
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                var loadingScreen = document.querySelector('.loading-screen');
+                loadingScreen.style.display = 'none';
+            }, 1000);
         });
     </script>
+
+<script src="https://files.coltensus.com/Offline-Screen-2.js"></script>
+
+    <script src="https://coltensus.com/devicedetailsgetterforconsolelogonly.js"></script>
+  
 </body>
 </html>
