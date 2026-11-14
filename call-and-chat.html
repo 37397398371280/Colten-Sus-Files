@@ -376,13 +376,14 @@
 
             const state = {
                 localPeerId: 'p_' + Math.random().toString(36).substring(2, 9),
+                joinTimestamp: Date.now(),
                 displayName: localStorage.getItem('nexus_name') || ('User_' + Math.floor(100 + Math.random() * 900)),
                 roomId: '',
                 isProtected: false,
                 roomPassword: '',
                 roomAuthHash: '',
                 topicHash: '',
-                isHost: false,
+                isHost: false, // Will be determined via handshake response
                 isCoHost: false,
                 hostPeerId: '',
                 roomLocked: false,
@@ -723,7 +724,7 @@
             }
 
             // ---------------------------------------------------------
-            // ROOM JOIN & HOST INITIALIZATION
+            // ROOM JOIN & HOST HANDSHAKE
             // ---------------------------------------------------------
             els.btnJoinRoom.addEventListener('click', async () => {
                 const name = els.inputDisplayName.value.trim();
@@ -743,7 +744,7 @@
                 const secretMaterial = state.isProtected ? `protected:${roomId}:${password}` : `open:${roomId}`;
                 state.roomAuthHash = await sha256Hex(secretMaterial);
 
-                // Initial Host assignment: First joiner is Host until proven otherwise
+                // Initially assume we are host until room-state check reveals an existing host
                 state.isHost = true;
                 state.hostPeerId = state.localPeerId;
                 updateRoleUI();
@@ -762,6 +763,11 @@
                 initBroadcastChannel();
                 connectMqttRelay();
                 startCallTimer();
+
+                // Broadcast join request to discover existing peers and room state
+                setTimeout(() => {
+                    broadcastSignal({ type: 'join-room', name: state.displayName, timestamp: state.joinTimestamp, authHash: state.roomAuthHash });
+                }, 300);
 
                 showToast(`Joined room ${roomId} successfully!`);
             });
@@ -796,8 +802,7 @@
                 if (window.BroadcastChannel) {
                     state.bc = new BroadcastChannel(`nexus-bc-${state.roomId}`);
                     state.bc.onmessage = (e) => handleSignalingMessage(e.data);
-                    // Announce presence immediately & periodically so existing peers notice us
-                    announcePresence();
+                    // Periodically announce presence
                     setInterval(() => {
                         if (state.roomId) announcePresence();
                     }, 4000);
@@ -805,7 +810,7 @@
             }
 
             function announcePresence() {
-                broadcastSignal({ type: 'presence-announce', name: state.displayName, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost });
+                broadcastSignal({ type: 'presence-announce', name: state.displayName, timestamp: state.joinTimestamp, authHash: state.roomAuthHash, isHost: state.isHost, isCoHost: state.isCoHost, hostPeerId: state.hostPeerId });
             }
 
             function broadcastSignal(payload) {
@@ -894,7 +899,7 @@
             async function handleSignalingMessage(msg) {
                 if (!msg || msg.room !== state.roomId || msg.from === state.localPeerId) return;
 
-                if (state.roomLocked && msg.type === 'presence-announce') {
+                if (state.roomLocked && (msg.type === 'presence-announce' || msg.type === 'join-room')) {
                     broadcastSignal({ type: 'reject_join', target: msg.from, reason: 'Room is locked by Host' });
                     return;
                 }
@@ -902,7 +907,7 @@
                 if (msg.target && msg.target !== state.localPeerId) return;
 
                 if (msg.authHash !== state.roomAuthHash) {
-                    if (msg.type === 'presence-announce') {
+                    if (msg.type === 'presence-announce' || msg.type === 'join-room') {
                         broadcastSignal({ type: 'auth_reject', target: msg.from, reason: 'Password Mismatch' });
                     }
                     return;
@@ -910,14 +915,41 @@
 
                 const peerId = msg.from;
 
-                if (msg.type === 'presence-announce' || msg.type === 'join-request') {
-                    // Acknowledge presence and determine if we should send an offer
-                    // Deterministic rule: The peer with the lexicographically higher ID initiates the offer
+                if (msg.type === 'join-room') {
+                    // Respond with room state so new joiner knows who the host is
+                    broadcastSignal({
+                        type: 'room-state',
+                        target: peerId,
+                        hostPeerId: state.hostPeerId,
+                        isHost: state.isHost,
+                        isCoHost: state.isCoHost,
+                        name: state.displayName,
+                        timestamp: state.joinTimestamp
+                    });
+
+                    // Establish peer connection (deterministically offer if our ID > peerId)
                     if (!state.peers.has(peerId)) {
                         const shouldOffer = state.localPeerId > peerId;
-                        getOrCreatePeer(peerId, msg.name, shouldOffer, msg.isHost, msg.isCoHost);
+                        getOrCreatePeer(peerId, msg.name, shouldOffer, false, false);
+                    }
+                } else if (msg.type === 'room-state') {
+                    // If we thought we were host, but an older joiner or existing host exists, respect authoritative host
+                    if (msg.hostPeerId && msg.hostPeerId !== state.localPeerId) {
+                        if (msg.hostPeerId < state.hostPeerId || state.isHost) {
+                            state.hostPeerId = msg.hostPeerId;
+                            state.isHost = (state.localPeerId === state.hostPeerId);
+                            updateRoleUI();
+                        }
+                    }
+                    if (!state.peers.has(peerId)) {
+                        const shouldOffer = state.localPeerId > peerId;
+                        getOrCreatePeer(peerId, msg.name || 'Peer', shouldOffer, msg.isHost, msg.isCoHost);
+                    }
+                } else if (msg.type === 'presence-announce') {
+                    if (!state.peers.has(peerId)) {
+                        const shouldOffer = state.localPeerId > peerId;
+                        getOrCreatePeer(peerId, msg.name || 'Peer', shouldOffer, msg.isHost, msg.isCoHost);
                     } else {
-                        // Ensure peer metadata is updated
                         const peer = state.peers.get(peerId);
                         if (peer && msg.name) peer.name = msg.name;
                     }
