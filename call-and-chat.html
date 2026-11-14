@@ -1093,10 +1093,6 @@
                 }
             }
 
-            
-                            // ---------------------------------------------------------
-            // FIXED PEER HANDSHAKE & OFFER NEGOTIATION
-            // ---------------------------------------------------------
             async function sendOfferToPeer(peerEntry) {
                 if (!peerEntry || peerEntry.pc.signalingState !== 'stable') return;
                 try {
@@ -1178,7 +1174,6 @@
                     if (msg.timestamp) peer.joinTimestamp = msg.timestamp;
                     updateParticipantList();
 
-                    // Force retry offer if stuck
                     if (shouldOffer && ['new', 'disconnected', 'checking'].includes(peer.pc.iceConnectionState)) {
                         await sendOfferToPeer(peer);
                     }
@@ -1313,7 +1308,6 @@
                 state.peers.set(peerId, peerEntry);
                 updateParticipantList();
 
-                // Attach local media tracks, or recvonly transceivers so SDP negotiation always succeeds
                 if (state.localStream && state.localStream.getTracks().length > 0) {
                     state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
                 } else {
@@ -1324,6 +1318,14 @@
                 pc.onicecandidate = e => {
                     if (e.candidate) {
                         broadcastSignal({ type: 'ice', target: peerId, candidate: e.candidate, authHash: state.roomAuthHash });
+                    }
+                };
+
+                // FIX: Force ICE restart / fallback gathering if stuck in 'new'
+                pc.onicegatheringstatechange = () => {
+                    if (pc.iceGatheringState === 'complete' && pc.iceConnectionState === 'new') {
+                        statusSpan.textContent = 'Gathering STUN/TURN...';
+                        if (shouldOffer) pc.restartIce();
                     }
                 };
 
@@ -1343,7 +1345,7 @@
                 pc.oniceconnectionstatechange = () => {
                     const iceState = pc.iceConnectionState;
                     if (iceState === 'connected' || iceState === 'completed') {
-                        statusSpan.textContent = 'Connected (Audio/No Video)';
+                        statusSpan.textContent = 'Connected';
                         if (remoteStream.getVideoTracks().length > 0) {
                             placeholder.classList.add('hidden');
                         }
@@ -1362,7 +1364,6 @@
 
                 if (shouldOffer) {
                     sendOfferToPeer(peerEntry);
-                    // Watchdog retry if stuck in connecting after 3.5 seconds
                     peerEntry.retryTimer = setTimeout(() => {
                         if (state.peers.has(peerId) && ['new', 'checking'].includes(pc.iceConnectionState)) {
                             sendOfferToPeer(peerEntry);
