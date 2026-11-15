@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PotatoRTC - Low Quality P2P Call</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darker: '#0b0f19',
+                        darkcard: '#111827',
+                        darkborder: '#1f2937'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome for sleek icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Terrible video filter: low res look, crunchy colors, pixelated & choppy */
+        .potato-video-filter {
+            filter: grayscale(40%) sepia(80%) hue-rotate(320deg) contrast(250%) saturate(300%) blur(1px);
+            image-rendering: pixelated;
+        }
+
+        .scanlines {
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.45) 50%
+            );
+            background-size: 100% 3px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-darker text-gray-100 min-h-screen flex flex-col justify-between selection:bg-amber-500 selection:text-white">
+
+    <!-- Top Navigation Header -->
+    <header class="w-full border-b border-darkborder bg-darkcard/50 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="bg-amber-600 p-2.5 rounded-xl shadow-lg shadow-amber-500/30">
+                <i class="fa-solid fa-triangle-exclamation text-white text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg tracking-tight text-white flex items-center gap-2">
+                    PotatoRTC <span class="text-xs font-semibold px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full">144p / 4 FPS Mode</span>
+                </h1>
+                <p class="text-xs text-gray-400">Terrible Quality P2P Video & Audio Calling</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <div id="connection-badge" class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium">
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                <span id="connection-status-text">Enter Room Code</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Call Arena Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-center items-center">
+        
+        <!-- Room Join Panel -->
+        <div id="room-panel" class="w-full max-w-md bg-darkcard border border-darkborder p-6 rounded-2xl shadow-2xl mb-8 flex flex-col items-center">
+            <div class="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-2xl mb-4 shadow-inner">
+                <i class="fa-solid fa-key"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-2">Join or Create Room</h2>
+            <p class="text-xs text-gray-400 text-center mb-6">Share your room code with a peer. All streams will be aggressively compressed to terrible quality.</p>
+            
+            <div class="w-full space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Room Code</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="room-code-input" placeholder="e.g. potato-call-99" class="flex-1 bg-gray-900 border border-darkborder rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500 font-mono">
+                        <button onclick="generateRandomRoom()" class="bg-gray-800 hover:bg-gray-700 px-4 rounded-xl border border-darkborder text-xs text-gray-300 font-medium transition-colors" title="Generate Random Code">
+                            <i class="fa-solid fa-dice"></i>
+                        </button>
+                    </div>
+                </div>
+                <button onclick="joinRoom()" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl shadow-lg shadow-amber-600/30 border border-amber-500/50 transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Connect to Room
+                </button>
+            </div>
+        </div>
+
+        <!-- Grid for Video Streams (Hidden until room joined) -->
+        <div id="video-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl mb-8 hidden">
+            
+            <!-- Local Participant Box -->
+            <div class="bg-darkcard border border-darkborder rounded-2xl overflow-hidden shadow-2xl relative flex flex-col group transition-all duration-300">
+                <div class="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur-md text-white text-xs font-medium px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
+                    <i class="fa-solid fa-user text-amber-400"></i> You (Terrible Quality Feed)
+                </div>
+                <div class="absolute top-4 right-4 z-20 flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-white/10 text-xs text-gray-300">
+                    <span id="local-mic-indicator" class="fa-solid fa-microphone text-emerald-400"></span>
+                    <span id="local-cam-indicator" class="fa-solid fa-video text-emerald-400"></span>
+                </div>
+                <div class="relative w-full aspect-video bg-gray-950 flex items-center justify-center overflow-hidden">
+                    <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover potato-video-filter transform -scale-x-100"></video>
+                    <div class="absolute inset-0 scanlines"></div>
+                </div>
+                <div class="p-3 bg-darkcard border-t border-darkborder/50 flex items-center justify-between text-xs text-gray-400 px-4">
+                    <span>Resolution: <span class="text-amber-400 font-mono">160x120 (144p)</span></span>
+                    <span>Framerate: <span class="text-amber-400 font-mono">4 FPS</span></span>
+                </div>
+            </div>
+
+            <!-- Remote Participant Box -->
+            <div class="bg-darkcard border border-darkborder rounded-2xl overflow-hidden shadow-2xl relative flex flex-col group transition-all duration-300">
+                <div class="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur-md text-white text-xs font-medium px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
+                    <i class="fa-solid fa-users text-indigo-400"></i> <span id="remote-peer-title">Remote Peer</span>
+                </div>
+                <div class="absolute top-4 right-4 z-20 flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-white/10 text-xs text-gray-300">
+                    <span id="remote-status-indicator" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span id="remote-status-label">Waiting for Peer</span>
+                </div>
+                <div class="relative w-full aspect-video bg-gray-950 flex items-center justify-center overflow-hidden">
+                    <video id="remote-video" autoplay playsinline class="w-full h-full object-cover potato-video-filter"></video>
+                    <div class="absolute inset-0 scanlines"></div>
+                    <!-- Waiting/Placeholder overlay -->
+                    <div id="remote-placeholder" class="absolute inset-0 bg-gray-900 flex flex-col items-center justify-center text-gray-500">
+                        <div class="w-20 h-20 rounded-full bg-gray-800/80 border border-gray-700 flex items-center justify-center text-3xl text-amber-400 mb-3 animate-pulse shadow-lg">
+                            <i class="fa-solid fa-satellite-dish"></i>
+                        </div>
+                        <p class="text-sm font-medium text-gray-300">Waiting for peer to join room...</p>
+                        <p class="text-xs text-gray-500 mt-1">Share room code with someone else</p>
+                    </div>
+                </div>
+                <div class="p-3 bg-darkcard border-t border-darkborder/50 flex items-center justify-between text-xs text-gray-400 px-4">
+                    <span>Packet Loss: <span class="text-red-400 font-mono">75% (Simulated)</span></span>
+                    <span>Audio: <span class="text-amber-400 font-mono">Tin-Can 8kHz</span></span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Call Action Control Bar (Hidden until room joined) -->
+        <div id="control-bar" class="w-full max-w-xl bg-darkcard/90 backdrop-blur-xl border border-darkborder p-4 rounded-2xl shadow-2xl flex items-center justify-center gap-4 hidden">
+            
+            <!-- Toggle Microphone Button -->
+            <button id="btn-toggle-mic" onclick="toggleMicrophone()" title="Mute/Unmute Mic" class="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center transition-all border border-gray-700/50 shadow-md group">
+                <i id="mic-icon" class="fa-solid fa-microphone text-base group-hover:scale-110 transition-transform"></i>
+            </button>
+
+            <!-- Toggle Camera Button -->
+            <button id="btn-toggle-cam" onclick="toggleCamera()" title="Turn Camera On/Off" class="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center transition-all border border-gray-700/50 shadow-md group">
+                <i id="cam-icon" class="fa-solid fa-video text-base group-hover:scale-110 transition-transform"></i>
+            </button>
+
+            <!-- Hang Up Button -->
+            <button onclick="leaveRoom()" title="Leave Room" class="w-12 h-12 rounded-xl bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all border border-red-500/50 shadow-lg shadow-red-600/30 cursor-pointer">
+                <i class="fa-solid fa-phone-slash text-base"></i>
+            </button>
+
+        </div>
+
+        <!-- Connection Logs Accordion / Box -->
+        <div class="w-full max-w-5xl mt-8 bg-darkcard border border-darkborder rounded-xl p-4 shadow-inner">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-terminal text-amber-400"></i> Potato Codec Diagnostics Log
+                </h3>
+                <button onclick="clearLogs()" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">Clear</button>
+            </div>
+            <div id="log-container" class="font-mono text-xs text-gray-400 bg-gray-950 p-3 rounded-lg h-24 overflow-y-auto space-y-1 border border-darkborder/50">
+                <div>[System]: Application loaded. Enter a room code to establish potato WebRTC connection.</div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full border-t border-darkborder bg-darkcard/30 px-6 py-4 text-center text-xs text-gray-500">
+        PotatoRTC - Peer-to-peer connection over public STUN servers with maximized quality degradation.
+    </footer>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 z-50 bg-gray-900 border border-gray-700 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-amber-400 text-lg"></i>
+        <span id="toast-msg" class="text-sm font-medium">Notification message here</span>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        let localStream = null;
+        let peerConnection = null;
+        let audioContext = null;
+        let biquadFilter = null;
+        let gainNode = null;
+        let sourceNode = null;
+        let isAudioMuted = false;
+        let isVideoOff = false;
+
+        // Public STUN server configuration for WebRTC
+        const rtcConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        function generateRandomRoom() {
+            const randomCode = 'potato-' + Math.random().toString(36.substring(2, 8));
+            document.getElementById('room-code-input').value = randomCode;
+        }
+
+        // Initialize connection when joining a room
+        async function joinRoom() {
+            const roomCode = document.getElementById('room-code-input').value.trim();
+            if (!roomCode) {
+                showToast("Please enter a valid room code.", "error");
+                return;
+            }
+
+            appendLog(`Joining room: "${roomCode}"...`);
+            
+            try {
+                // Request media with forced terrible constraints (160x120 resolution, 4 FPS)
+                appendLog("Acquiring media with terrible constraints (160x120, 4 FPS, mono 8kHz)...");
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 160 }, height: { ideal: 120 }, frameRate: { ideal: 4 } },
+                    audio: { echoCancellation: false, noiseSuppression: false, sampleRate: 8000 }
+                });
+
+                const localVideo = document.getElementById('local-video');
+                localVideo.srcObject = localStream;
+
+                // Setup atrocious audio filtering (tin-can bandpass filter)
+                setupTerribleAudioPipeline(localStream);
+
+                // Switch UI views
+                document.getElementById('room-panel').classList.add('hidden');
+                document.getElementById('video-grid').classList.remove('hidden');
+                document.getElementById('control-bar').classList.remove('hidden');
+
+                updateConnectionState("connecting", `Room: ${roomCode} (Connecting...)`);
+                appendLog("Local media stream secured. Initializing RTCPeerConnection...");
+
+                // Setup WebRTC Peer Connection
+                peerConnection = new RTCPeerConnection(rtcConfig);
+
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                peerConnection.ontrack = (event) => {
+                    appendLog("Received remote stream track from peer.");
+                    const remoteVideo = document.getElementById('remote-video');
+                    if (remoteVideo.srcObject !== event.streams[0]) {
+                        remoteVideo.srcObject = event.streams[0];
+                        document.getElementById('remote-placeholder').classList.add('hidden');
+                        updateConnectionState("connected", `Connected in Room: ${roomCode}`);
+                        document.getElementById('remote-status-indicator').className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+                        document.getElementById('remote-status-label').innerText = "Live Potato Peer";
+                    }
+                };
+
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        appendLog(`ICE Candidate generated: ${event.candidate.type}`);
+                    }
+                };
+
+                // Create offer for signaling simulation / connection
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                appendLog("SDP Offer created successfully.");
+
+                showToast(`Joined room ${roomCode} successfully!`, "success");
+
+            } catch (err) {
+                console.error("Media error:", err);
+                appendLog(`[Error]: Failed to join room - ${err.message}`);
+                showToast("Camera access denied or device unavailable.", "error");
+            }
+        }
+
+        // Setup Web Audio API to horribly distort microphone audio into tin-can sound
+        function setupTerribleAudioPipeline(stream) {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                sourceNode = audioContext.createMediaStreamSource(stream);
+
+                biquadFilter = audioContext.createBiquadFilter();
+                biquadFilter.type = "bandpass";
+                biquadFilter.frequency.value = 1000;
+                biquadFilter.Q.value = 6.0; // High screechy resonance
+
+                gainNode = audioContext.createGain();
+                gainNode.gain.value = 1.8;
+
+                sourceNode.connect(biquadFilter);
+                biquadFilter.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                appendLog("Terrible audio filter applied: Bandpass tin-can mode active.");
+            } catch (e) {
+                appendLog("[Audio Warning]: Web Audio API restriction encountered.");
+            }
+        }
+
+        function toggleMicrophone() {
+            if (!localStream) return;
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (!audioTrack) return;
+
+            isAudioMuted = !isAudioMuted;
+            audioTrack.enabled = !isAudioMuted;
+
+            const btn = document.getElementById('btn-toggle-mic');
+            const icon = document.getElementById('mic-icon');
+            const indicator = document.getElementById('local-mic-indicator');
+
+            if (isAudioMuted) {
+                if (gainNode) gainNode.gain.value = 0;
+                btn.className = "w-12 h-12 rounded-xl bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all border border-red-500/50 shadow-md group";
+                icon.className = "fa-solid fa-microphone-slash text-base group-hover:scale-110 transition-transform";
+                indicator.className = "fa-solid fa-microphone-slash text-red-400";
+                showToast("Microphone muted.", "info");
+                appendLog("Local microphone muted.");
+            } else {
+                if (gainNode) gainNode.gain.value = 1.8;
+                btn.className = "w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center transition-all border border-gray-700/50 shadow-md group";
+                icon.className = "fa-solid fa-microphone text-base group-hover:scale-110 transition-transform";
+                indicator.className = "fa-solid fa-microphone text-emerald-400";
+                showToast("Microphone unmuted.", "info");
+                appendLog("Local microphone restored to tin-can filter.");
+            }
+        }
+
+        function toggleCamera() {
+            if (!localStream) return;
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (!videoTrack) return;
+
+            isVideoOff = !isVideoOff;
+            videoTrack.enabled = !isVideoOff;
+
+            const btn = document.getElementById('btn-toggle-cam');
+            const icon = document.getElementById('cam-icon');
+            const indicator = document.getElementById('local-cam-indicator');
+
+            if (isVideoOff) {
+                btn.className = "w-12 h-12 rounded-xl bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all border border-red-500/50 shadow-md group";
+                icon.className = "fa-solid fa-video-slash text-base group-hover:scale-110 transition-transform";
+                indicator.className = "fa-solid fa-video-slash text-red-400";
+                showToast("Camera disabled.", "info");
+                appendLog("Local camera disabled.");
+            } else {
+                btn.className = "w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center transition-all border border-gray-700/50 shadow-md group";
+                icon.className = "fa-solid fa-video text-base group-hover:scale-110 transition-transform";
+                indicator.className = "fa-solid fa-video text-emerald-400";
+                showToast("Camera enabled.", "info");
+                appendLog("Local camera enabled.");
+            }
+        }
+
+        function leaveRoom() {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close();
+            }
+
+            // Reset UI
+            document.getElementById('video-grid').classList.add('hidden');
+            document.getElementById('control-bar').classList.add('hidden');
+            document.getElementById('room-panel').classList.remove('hidden');
+            document.getElementById('remote-placeholder').classList.remove('hidden');
+            document.getElementById('remote-video').srcObject = null;
+            document.getElementById('remote-status-indicator').className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
+            document.getElementById('remote-status-label').innerText = "Waiting for Peer";
+
+            updateConnectionState("ready", "Enter Room Code");
+            showToast("Left room successfully.", "info");
+            appendLog("Room connection terminated cleanly.");
+        }
+
+        function updateConnectionState(state, text) {
+            const badge = document.getElementById('connection-badge');
+            const textEl = document.getElementById('connection-status-text');
+            textEl.innerText = text;
+
+            if (state === 'connected') {
+                badge.className = "flex items-center space-x-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium";
+                badge.querySelector('span').className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+            } else if (state === 'connecting') {
+                badge.className = "flex items-center space-x-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium";
+                badge.querySelector('span').className = "w-2 h-2 rounded-full bg-amber-400 animate-ping";
+            } else {
+                badge.className = "flex items-center space-x-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium";
+                badge.querySelector('span').className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
+            }
+        }
+
+        function appendLog(message) {
+            const container = document.getElementById('log-container');
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.innerText = `[${timestamp}] ${message}`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('log-container').innerHTML = '';
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-msg');
+            const iconEl = document.getElementById('toast-icon');
+
+            msgEl.innerText = message;
+            if (type === 'error') {
+                iconEl.className = "fa-solid fa-circle-exclamation text-red-400 text-lg";
+            } else {
+                iconEl.className = "fa-solid fa-circle-check text-amber-400 text-lg";
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3500);
+        }
+    </script>
+</body>
+</html>
