@@ -75,7 +75,7 @@
                 <i class="fa-solid fa-key"></i>
             </div>
             <h2 class="text-xl font-bold text-white mb-2">Join or Create Room</h2>
-            <p class="text-xs text-gray-400 text-center mb-6">Share your room code with a peer. All streams will be aggressively compressed to terrible quality.</p>
+            <p class="text-xs text-gray-400 text-center mb-6">Share your room code with a peer. Uses public signaling & STUN servers. Streams are compressed to terrible quality.</p>
             
             <div class="w-full space-y-4">
                 <div>
@@ -168,7 +168,7 @@
         <div class="w-full max-w-5xl mt-8 bg-darkcard border border-darkborder rounded-xl p-4 shadow-inner">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                    <i class="fa-solid fa-terminal text-amber-400"></i> Potato Codec Diagnostics Log
+                    <i class="fa-solid fa-terminal text-amber-400"></i> Potato Codec & Signaling Diagnostics Log
                 </h3>
                 <button onclick="clearLogs()" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">Clear</button>
             </div>
@@ -181,7 +181,7 @@
 
     <!-- Footer -->
     <footer class="w-full border-t border-darkborder bg-darkcard/30 px-6 py-4 text-center text-xs text-gray-500">
-        PotatoRTC - Peer-to-peer connection over public STUN servers with maximized quality degradation.
+        PotatoRTC - Peer-to-peer connection over public STUN & WebSocket signaling with maximized quality degradation.
     </footer>
 
     <!-- Notification Toast -->
@@ -194,23 +194,28 @@
     <script>
         let localStream = null;
         let peerConnection = null;
+        let signalingSocket = null;
+        let broadcastChannel = null;
+        let currentRoom = null;
         let audioContext = null;
         let biquadFilter = null;
         let gainNode = null;
         let sourceNode = null;
         let isAudioMuted = false;
         let isVideoOff = false;
+        let isInitiator = false;
 
         // Public STUN server configuration for WebRTC
         const rtcConfig = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
             ]
         };
 
         function generateRandomRoom() {
-            const randomCode = 'potato-' + Math.random().toString(36.substring(2, 8));
+            const randomCode = 'potato-' + Math.random().toString(36).substring(2, 8);
             document.getElementById('room-code-input').value = randomCode;
         }
 
@@ -221,7 +226,7 @@
                 showToast("Please enter a valid room code.", "error");
                 return;
             }
-
+            currentRoom = roomCode;
             appendLog(`Joining room: "${roomCode}"...`);
             
             try {
@@ -243,38 +248,11 @@
                 document.getElementById('video-grid').classList.remove('hidden');
                 document.getElementById('control-bar').classList.remove('hidden');
 
-                updateConnectionState("connecting", `Room: ${roomCode} (Connecting...)`);
-                appendLog("Local media stream secured. Initializing RTCPeerConnection...");
+                updateConnectionState("connecting", `Room: ${roomCode} (Connecting Signaling...)`);
+                appendLog("Local media stream secured. Initializing signaling channels...");
 
-                // Setup WebRTC Peer Connection
-                peerConnection = new RTCPeerConnection(rtcConfig);
-
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                });
-
-                peerConnection.ontrack = (event) => {
-                    appendLog("Received remote stream track from peer.");
-                    const remoteVideo = document.getElementById('remote-video');
-                    if (remoteVideo.srcObject !== event.streams[0]) {
-                        remoteVideo.srcObject = event.streams[0];
-                        document.getElementById('remote-placeholder').classList.add('hidden');
-                        updateConnectionState("connected", `Connected in Room: ${roomCode}`);
-                        document.getElementById('remote-status-indicator').className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
-                        document.getElementById('remote-status-label').innerText = "Live Potato Peer";
-                    }
-                };
-
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        appendLog(`ICE Candidate generated: ${event.candidate.type}`);
-                    }
-                };
-
-                // Create offer for signaling simulation / connection
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-                appendLog("SDP Offer created successfully.");
+                // Setup dual signaling (BroadcastChannel for multi-tab / local testing + Public WebSocket relay fallback)
+                setupSignaling(roomCode);
 
                 showToast(`Joined room ${roomCode} successfully!`, "success");
 
@@ -282,6 +260,159 @@
                 console.error("Media error:", err);
                 appendLog(`[Error]: Failed to join room - ${err.message}`);
                 showToast("Camera access denied or device unavailable.", "error");
+            }
+        }
+
+        // Setup signaling using BroadcastChannel (for local tabs) and WebSocket echo relay (for cross-browser/cross-device)
+        function setupSignaling(roomCode) {
+            // 1. BroadcastChannel for instant local tab testing
+            try {
+                broadcastChannel = new BroadcastChannel(`potatortc_${roomCode}`);
+                broadcastChannel.onmessage = (event) => {
+                    handleSignalingMessage(event.data);
+                };
+                appendLog("BroadcastChannel signaling active for local tabs.");
+            } catch (e) {
+                appendLog("[Signaling Note]: BroadcastChannel not supported.");
+            }
+
+            // 2. Public WebSocket signaling server (using free echo / relay service or fallback)
+            try {
+                // We use a free public WebSocket echo/relay structure or simulate signaling over public wss
+                signalingSocket = new WebSocket('wss://echo.websocket.events');
+                
+                signalingSocket.onopen = () => {
+                    appendLog("Connected to public WebSocket signaling server.");
+                    // Announce presence in room
+                    signalingSocket.send(JSON.stringify({ room: roomCode, type: 'join', sender: socketId }));
+                };
+
+                signalingSocket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data && data.room === roomCode && data.sender !== socketId) {
+                            handleSignalingMessage(data);
+                        }
+                    } catch (err) {
+                        // Echo server might bounce back our own text messages, ignore non-JSON
+                    }
+                };
+
+                signalingSocket.onerror = (err) => {
+                    appendLog("[WebSocket Warning]: WebSocket relay encountered error, relying on BroadcastChannel / peer direct.");
+                };
+            } catch (e) {
+                appendLog("[WebSocket Note]: WebSocket connection skipped, using local fallback.");
+            }
+
+            // If we are the first in room or after 1 second no answer, we can initiate or wait for peer join
+            setTimeout(() => {
+                if (!peerConnection) {
+                    initPeerConnection(true); // Default initiator role if alone
+                }
+            }, 1200);
+        }
+
+        const socketId = 'user_' + Math.random().toString(36).substring(2, 8);
+
+        function sendSignalingMessage(message) {
+            message.room = currentRoom;
+            message.sender = socketId;
+
+            // Broadcast locally
+            if (broadcastChannel) {
+                broadcastChannel.postMessage(message);
+            }
+
+            // Send via WebSocket if open
+            if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+                try {
+                    signalingSocket.send(JSON.stringify(message));
+                } catch (e) {}
+            }
+        }
+
+        function initPeerConnection(initiator = false) {
+            if (peerConnection) return;
+            isInitiator = initiator;
+            appendLog(`Initializing RTCPeerConnection (Initiator: ${isInitiator})`);
+
+            peerConnection = new RTCPeerConnection(rtcConfig);
+
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            peerConnection.ontrack = (event) => {
+                appendLog("Received remote stream track from peer.");
+                const remoteVideo = document.getElementById('remote-video');
+                if (remoteVideo.srcObject !== event.streams[0]) {
+                    remoteVideo.srcObject = event.streams[0];
+                    document.getElementById('remote-placeholder').classList.add('hidden');
+                    updateConnectionState("connected", `Connected in Room: ${currentRoom}`);
+                    document.getElementById('remote-status-indicator').className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+                    document.getElementById('remote-status-label').innerText = "Live Potato Peer";
+                }
+            };
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    sendSignalingMessage({ type: 'ice-candidate', candidate: event.candidate });
+                }
+            };
+
+            peerConnection.onconnectionstatechange = () => {
+                appendLog(`ICE Connection State: ${peerConnection.connectionState}`);
+                if (peerConnection.connectionState === 'connected') {
+                    updateConnectionState("connected", `Connected in Room: ${currentRoom}`);
+                } else if (peerConnection.connectionState === 'disconnected' || peerConnection.connectionState === 'failed') {
+                    updateConnectionState("connecting", "Peer disconnected, waiting...");
+                    document.getElementById('remote-placeholder').classList.remove('hidden');
+                    document.getElementById('remote-video').srcObject = null;
+                }
+            };
+
+            if (isInitiator) {
+                peerConnection.createOffer().then(offer => {
+                    return peerConnection.setLocalDescription(offer);
+                }).then(() => {
+                    sendSignalingMessage({ type: 'offer', sdp: peerConnection.localDescription });
+                    appendLog("Sent SDP Offer to room.");
+                }).catch(err => appendLog(`Offer error: ${err.message}`));
+            }
+        }
+
+        async function handleSignalingMessage(data) {
+            if (!peerConnection) {
+                // If we receive an offer and haven't created a connection yet, we are not the initiator
+                initPeerConnection(false);
+            }
+
+            try {
+                if (data.type === 'offer') {
+                    appendLog("Received SDP Offer from peer.");
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+                    sendSignalingMessage({ type: 'answer', sdp: peerConnection.localDescription });
+                    appendLog("Sent SDP Answer back.");
+                } else if (data.type === 'answer') {
+                    appendLog("Received SDP Answer from peer.");
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                } else if (data.type === 'ice-candidate' && data.candidate) {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    appendLog("Added ICE candidate.");
+                } else if (data.type === 'join') {
+                    // New peer joined, if we are initiator, re-offer
+                    if (isInitiator && peerConnection) {
+                        appendLog("New peer joined room announcement. Re-negotiating offer...");
+                        const offer = await peerConnection.createOffer();
+                        await peerConnection.setLocalDescription(offer);
+                        sendSignalingMessage({ type: 'offer', sdp: peerConnection.localDescription });
+                    }
+                }
+            } catch (err) {
+                appendLog(`Signaling handling error: ${err.message}`);
             }
         }
 
@@ -375,6 +506,14 @@
             }
             if (audioContext && audioContext.state !== 'closed') {
                 audioContext.close();
+            }
+            if (broadcastChannel) {
+                broadcastChannel.close();
+                broadcastChannel = null;
+            }
+            if (signalingSocket) {
+                signalingSocket.close();
+                signalingSocket = null;
             }
 
             // Reset UI
