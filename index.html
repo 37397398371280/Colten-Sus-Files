@@ -407,6 +407,7 @@
                 bc: null,
                 presenceInterval: null,
                 statsInterval: null,
+                healthCheckInterval: null,
                 mqttWs: null,
                 mqttConnected: false,
                 mqttBrokerIndex: 0,
@@ -929,6 +930,39 @@
                 startCallTimer();
                 state.statsInterval = setInterval(updateTelemetry, 2000);
 
+                // Start connection health checker & self-healing loop
+                if (state.healthCheckInterval) clearInterval(state.healthCheckInterval);
+                state.healthCheckInterval = setInterval(() => {
+                    if (!state.roomId) return;
+                    const now = Date.now();
+                    state.peers.forEach((peer, peerId) => {
+                        const isConnected = ['connected', 'completed'].includes(peer.pc.iceConnectionState);
+                        // If stuck in checking/new for over 4 seconds, force restart ice and re-offer
+                        if (!isConnected && (now - peer.lastSeen > 4000) && state.localPeerId > peerId) {
+                            peer.lastSeen = now; // throttle attempts
+                            try {
+                                peer.pc.restartIce();
+                                sendOfferToPeer(peer);
+                            } catch (e) {}
+                        }
+                    });
+                }, 4000);
+
+                // Handle mobile visibility restoration
+                document.addEventListener('visibilitychange', () => {
+                    if (!document.hidden && state.roomId) {
+                        announcePresence();
+                        state.peers.forEach((peer, peerId) => {
+                            if (!['connected', 'completed'].includes(peer.pc.iceConnectionState) && state.localPeerId > peerId) {
+                                try {
+                                    peer.pc.restartIce();
+                                    sendOfferToPeer(peer);
+                                } catch (e) {}
+                            }
+                        });
+                    }
+                });
+
                 broadcastSignal({
                     type: 'join-room',
                     name: state.displayName,
@@ -991,6 +1025,10 @@
                 if (state.statsInterval) {
                     clearInterval(state.statsInterval);
                     state.statsInterval = null;
+                }
+                if (state.healthCheckInterval) {
+                    clearInterval(state.healthCheckInterval);
+                    state.healthCheckInterval = null;
                 }
                 state.peers.forEach(p => {
                     if (p.retryTimer) clearTimeout(p.retryTimer);
@@ -1909,7 +1947,6 @@
                 const totalChunks = Math.ceil(fileData.length / FILE_CHUNK_SIZE);
 
                 for (let i = 0; i < totalChunks; i++) {
-                    // Yield if any open DataChannel buffer exceeds 256KB
                     let needsWait = false;
                     state.peers.forEach(peer => {
                         if (peer.dc && peer.dc.readyState === 'open' && peer.dc.bufferedAmount > 262144) {
