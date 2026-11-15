@@ -13,7 +13,7 @@
     :root {
       --bg-primary: #090d16;
       --bg-secondary: #111827;
-      --bg-panel: rgba(17, 24, 39, 0.85);
+      --bg-panel: rgba(17, 24, 39, 0.88);
       --border-glass: rgba(255, 255, 255, 0.1);
       --accent-indigo: #6366f1;
       --accent-emerald: #10b981;
@@ -101,7 +101,7 @@
     }
     .floating-emoji {
       position: absolute;
-      bottom: 48px;
+      bottom: 64px;
       left: 50%;
       font-size: 2.5rem;
       pointer-events: none;
@@ -175,7 +175,7 @@
 
     /* Safe-area bottom padding helper for iPhone home indicator */
     .pb-safe {
-      padding-bottom: max(0.65rem, env(safe-area-inset-bottom));
+      padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
     }
     .pt-safe {
       padding-top: env(safe-area-inset-top);
@@ -997,7 +997,6 @@
         }
 
         try {
-          // Attempt full Audio + Video first
           const stream = await navigator.mediaDevices.getUserMedia({
             video: getVideoConstraints(),
             audio: getAudioConstraints()
@@ -1195,11 +1194,9 @@
         state.joinedAt = Date.now();
         localStorage.setItem('nexusmeet_name', displayName);
 
-        // Step 1: Attempt to claim the deterministic Host Peer ID
         const hostId = getHostPeerId(roomId);
         try {
           const peer = await createPeerInstance(hostId);
-          // Successfully claimed host ID -> We are the Room Host!
           state.isHost = true;
           state.isCoHost = false;
           state.myPeerId = peer.id;
@@ -1208,7 +1205,6 @@
           showToast('Room created! You are the Host.', 'success');
         } catch (err) {
           if (err && err.type === 'unavailable-id') {
-            // Host ID already exists -> Join as a Guest!
             try {
               const guestId = getGuestPeerId(roomId);
               const guestPeer = await createPeerInstance(guestId);
@@ -1262,12 +1258,10 @@
       }
 
       function attachGlobalPeerListeners(peer) {
-        // Incoming DataConnection (handshake from guests or mesh peers)
         peer.on('connection', (conn) => {
           setupDataConnection(conn, false);
         });
 
-        // Incoming WebRTC MediaCall
         peer.on('call', (call) => {
           const streamToAnswer = getOutboundMediaStream();
           call.answer(streamToAnswer || undefined);
@@ -1325,7 +1319,6 @@
             enterCallRoom();
             showToast('Joined room successfully!', 'success');
 
-            // Register Host & all existing participants, and initiate mesh connections
             if (Array.isArray(msg.participants)) {
               msg.participants.forEach((p) => {
                 if (p.id === state.myPeerId) return;
@@ -1335,7 +1328,6 @@
                 }
               });
             }
-            // Initiate media call to Host
             initiateMediaCallToPeer(hostId);
           } else if (msg.type === 'join-rejected') {
             clearTimeout(handshakeTimeout);
@@ -1398,7 +1390,6 @@
       function initiateMediaCallToPeer(targetPeerId) {
         if (targetPeerId === state.myPeerId || state.mediaCalls.has(targetPeerId)) return;
         const stream = getOutboundMediaStream();
-        // If user is in Listen-Only mode with no tracks, create a tiny silent canvas/audio dummy stream so PeerJS call negotiates cleanly
         const callStream = stream || createDummySilentStream();
         const call = state.peer.call(targetPeerId, callStream);
         if (call) {
@@ -1415,7 +1406,6 @@
           ctx.fillStyle = '#090d16';
           ctx.fillRect(0, 0, 16, 16);
           const stream = canvas.captureStream(1);
-          // Disable track immediately so remote knows there's no real video
           stream.getVideoTracks().forEach(t => (t.enabled = false));
           return stream;
         } catch (e) {
@@ -1499,7 +1489,6 @@
         if (!msg || typeof msg !== 'object') return;
 
         switch (msg.type) {
-          /* --- HOST ONLY: Validate incoming guest handshake --- */
           case 'join-request': {
             if (!state.isHost) return;
             if (state.roomLocked) {
@@ -1524,7 +1513,6 @@
             };
             upsertParticipant(newParticipant);
 
-            // Send acceptance + full participant list to newcomer
             const participantList = Array.from(state.participants.values()).map(p => ({
               id: p.id,
               name: p.name,
@@ -1543,7 +1531,6 @@
               participants: participantList
             });
 
-            // Tell all existing peers to connect to the newcomer
             broadcastData({
               type: 'peer-joined',
               participant: newParticipant
@@ -1553,24 +1540,20 @@
             break;
           }
 
-          /* --- Existing peer receives notification of newcomer --- */
           case 'peer-joined': {
             if (!msg.participant || msg.participant.id === state.myPeerId) return;
             upsertParticipant(msg.participant);
             appendSystemMessage(`${msg.participant.name} joined the room.`);
-            // Initiate mesh connection to newcomer
             connectToMeshPeer(msg.participant.id);
             break;
           }
 
-          /* --- Direct mesh peer introduction --- */
           case 'peer-hello': {
             if (!msg.participant || msg.participant.id === state.myPeerId) return;
             upsertParticipant(msg.participant);
             break;
           }
 
-          /* --- Participant media/hand/role state update --- */
           case 'state-update': {
             const p = state.participants.get(fromPeerId);
             if (p && msg.patch) {
@@ -1581,7 +1564,6 @@
             break;
           }
 
-          /* --- Chat Text Message --- */
           case 'chat-message': {
             const sender = state.participants.get(fromPeerId);
             const senderName = msg.senderName || (sender ? sender.name : 'Participant');
@@ -1595,7 +1577,6 @@
             break;
           }
 
-          /* --- P2P File / Image Share --- */
           case 'chat-file': {
             const sender = state.participants.get(fromPeerId);
             const senderName = msg.senderName || (sender ? sender.name : 'Participant');
@@ -1611,7 +1592,6 @@
             break;
           }
 
-          /* --- Typing Indicator --- */
           case 'typing': {
             const sender = state.participants.get(fromPeerId);
             const name = sender ? sender.name : 'Someone';
@@ -1619,13 +1599,11 @@
             break;
           }
 
-          /* --- Floating Emoji Reaction --- */
           case 'reaction': {
             triggerFloatingEmoji(fromPeerId, msg.emoji);
             break;
           }
 
-          /* --- Moderation: Remote Mute Command --- */
           case 'mod-mute': {
             if (state.micEnabled) {
               toggleMicrophone(false);
@@ -1635,7 +1613,6 @@
             break;
           }
 
-          /* --- Moderation: Promote / Demote Co-Host --- */
           case 'mod-role': {
             state.isCoHost = !!msg.isCoHost;
             const me = state.participants.get(state.myPeerId);
@@ -1647,14 +1624,12 @@
             break;
           }
 
-          /* --- Moderation: Kick Participant --- */
           case 'mod-kick': {
             showToast('You were removed from the room by the host.', 'error');
             leaveRoom(true);
             break;
           }
 
-          /* --- Room Lock Broadcast --- */
           case 'room-lock': {
             state.roomLocked = !!msg.locked;
             el.headerLockBadge.classList.toggle('hidden', !state.roomLocked);
@@ -1662,7 +1637,6 @@
             break;
           }
 
-          /* --- Host Failover Announcement --- */
           case 'new-host-elected': {
             const newHostId = msg.newHostId;
             state.participants.forEach((p, id) => {
@@ -1700,7 +1674,6 @@
         renderVideoGrid();
         renderParticipantsList();
 
-        // Automatic Host Failover if the disconnected peer was the Host
         if (wasHost && state.inCall && !state.offlineDemo && !state.failoverInProgress) {
           attemptHostFailover();
         }
@@ -1708,7 +1681,6 @@
 
       async function attemptHostFailover() {
         state.failoverInProgress = true;
-        // Sort remaining participants by earliest joinedAt timestamp so the longest-connected peer claims host first
         const remaining = Array.from(state.participants.values()).sort((a, b) => a.joinedAt - b.joinedAt);
         if (remaining.length === 0) {
           state.failoverInProgress = false;
@@ -1719,19 +1691,16 @@
         const targetHostId = getHostPeerId(state.roomId);
 
         if (designatedSuccessor.id === state.myPeerId) {
-          // Wait briefly for old host ID to release on PeerJS server, with retry backoff
           for (let attempt = 0; attempt < 4; attempt++) {
             await new Promise(r => setTimeout(r, 800 + attempt * 600));
             try {
               const newHostPeer = await createPeerInstance(targetHostId);
-              // Swap peer instance seamlessly
               const oldPeer = state.peer;
               state.peer = newHostPeer;
               state.myPeerId = targetHostId;
               state.isHost = true;
               state.isCoHost = false;
 
-              // Update self in participants map
               const myRecord = state.participants.get(oldPeer.id);
               if (myRecord) {
                 state.participants.delete(oldPeer.id);
@@ -1743,7 +1712,6 @@
 
               try { oldPeer.destroy(); } catch (e) {}
 
-              // Re-establish mesh connections under the new host ID
               const otherPeers = Array.from(state.participants.keys()).filter(id => id !== targetHostId);
               state.dataConns.clear();
               state.mediaCalls.clear();
@@ -1760,7 +1728,6 @@
             }
           }
         } else {
-          // Wait for designated successor to claim host ID and connect to them
           setTimeout(() => {
             if (!state.dataConns.has(targetHostId) && state.inCall) {
               connectToMeshPeer(targetHostId);
@@ -1771,10 +1738,7 @@
       }
 
       function handleRuntimePeerError(err) {
-        if (err.type === 'peer-unavailable') {
-          // Ignore transient peer-unavailable during mesh races
-          return;
-        }
+        if (err.type === 'peer-unavailable') return;
         console.warn('PeerJS runtime notice:', err);
       }
 
@@ -1786,23 +1750,19 @@
         state.inCall = true;
         cleanupAudioAnalyser('local-preview');
 
-        // Switch Views
         el.lobbyView.classList.add('hidden');
         el.roomView.classList.remove('hidden');
 
-        // Set Header Info
         el.headerRoomId.textContent = state.roomId;
         updateHeaderRoleBadges();
         updateConnectionBanner(state.offlineDemo ? 'Offline Sandbox Mode' : 'Connected • P2P Mesh', 'emerald');
 
-        // Register Self in Participants Map
         const selfParticipant = {
           ...getMyParticipantPayload(),
           stream: state.localStream
         };
         state.participants.set(state.myPeerId, selfParticipant);
 
-        // Setup Local Audio Visualizer
         if (state.localStream && state.localStream.getAudioTracks().length > 0) {
           setupAudioAnalyser(state.myPeerId, state.localStream, (level) => {
             const tile = document.getElementById(`tile-${state.myPeerId}`);
@@ -1812,7 +1772,6 @@
           });
         }
 
-        // Sync Controls & Render
         syncInCallControlButtons();
         renderVideoGrid();
         renderParticipantsList();
@@ -1823,14 +1782,12 @@
         state.inCall = false;
         clearInterval(state.timerInterval);
 
-        // Stop screen share if active
         if (state.screenStream) {
           state.screenStream.getTracks().forEach(t => t.stop());
           state.screenStream = null;
           state.screenSharing = false;
         }
 
-        // Close all peer connections & destroy PeerJS cleanly
         state.dataConns.forEach(c => { try { c.close(); } catch (e) {} });
         state.mediaCalls.forEach(c => { try { c.close(); } catch (e) {} });
         state.dataConns.clear();
@@ -1848,7 +1805,6 @@
         state.offlineDemo = false;
         state.pinnedPeerId = null;
 
-        // Reset UI back to Lobby
         el.roomView.classList.add('hidden');
         el.lobbyView.classList.remove('hidden');
         el.chatMessages.innerHTML = `<div class="text-center text-[11px] text-slate-500 py-2">End-to-end peer-to-peer chat. Messages & files are sent directly between participants.</div>`;
@@ -1917,11 +1873,9 @@
           el.headerParticipantsCount.textContent = String(count);
         }
 
-        // Determine if Spotlight mode is active
         const isSpotlight = state.pinnedPeerId && state.participants.has(state.pinnedPeerId) && count > 1;
         el.btnUnpinAll.classList.toggle('hidden', !isSpotlight);
 
-        // Preserve existing video elements by peerId so streams don't flicker
         const existingVideos = new Map();
         el.videoGrid.querySelectorAll('video[data-peer-id]').forEach(v => {
           existingVideos.set(v.dataset.peerId, v);
@@ -1948,7 +1902,6 @@
           el.videoGrid.appendChild(pinnedStage);
           el.videoGrid.appendChild(filmstripStage);
         } else {
-          // Portrait-aware grid: stack 2 participants vertically (1 col x 2 rows) on narrow portrait viewports
           const isPortraitMobile = window.innerWidth < 640 && window.innerHeight >= window.innerWidth;
           let cols = 'grid-cols-1';
           if (count === 2) {
@@ -1975,7 +1928,6 @@
         tile.id = `tile-${p.id}`;
         tile.className = `video-tile relative w-full h-full min-h-[160px] bg-slate-900 rounded-2xl overflow-hidden flex items-center justify-center group ${isPinned ? 'is-pinned' : ''}`;
 
-        // Video Element
         const videoEl = reusedVideoEl || document.createElement('video');
         videoEl.dataset.peerId = p.id;
         videoEl.autoplay = true;
@@ -1995,7 +1947,6 @@
         videoEl.classList.toggle('hidden', !showVideo);
         tile.appendChild(videoEl);
 
-        // Avatar Placeholder when camera is off
         if (!showVideo) {
           const avatarWrap = document.createElement('div');
           avatarWrap.className = 'flex flex-col items-center justify-center p-4 text-center';
@@ -2008,7 +1959,6 @@
           tile.appendChild(avatarWrap);
         }
 
-        // Top-Left Hand Raised & Screen Share Badges
         const topBadges = document.createElement('div');
         topBadges.className = 'absolute top-3 left-3 flex items-center gap-1.5 z-10';
         if (p.handRaised) {
@@ -2019,7 +1969,6 @@
         }
         tile.appendChild(topBadges);
 
-        // Top-Right Tile Action Buttons (Pin / Picture-in-Picture)
         const tileActions = document.createElement('div');
         tileActions.className = 'absolute top-3 right-3 flex items-center gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition z-10';
 
@@ -2057,7 +2006,6 @@
         }
         tile.appendChild(tileActions);
 
-        // Bottom Nameplate & Mic Status
         const bottomBar = document.createElement('div');
         bottomBar.className = 'absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 pointer-events-none z-10';
         const roleTag = p.isHost ? ' • Host' : p.isCoHost ? ' • Co-Host' : '';
@@ -2218,7 +2166,6 @@
 
       async function toggleScreenShare() {
         if (state.screenSharing) {
-          // Stop Screen Share and revert back to camera track
           if (state.screenStream) {
             state.screenStream.getTracks().forEach(t => t.stop());
             state.screenStream = null;
@@ -2251,7 +2198,6 @@
           state.screenStream = displayStream;
           state.screenSharing = true;
 
-          // Handle browser's native "Stop Sharing" button
           screenTrack.onended = () => {
             if (state.screenSharing) toggleScreenShare();
           };
@@ -2274,31 +2220,26 @@
       }
 
       function syncInCallControlButtons() {
-        // Mic Button
         el.ctrlMic.className = state.micEnabled
           ? 'w-11 h-11 md:w-auto md:h-auto md:px-4 md:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white transition flex items-center justify-center gap-2 shrink-0'
           : 'w-11 h-11 md:w-auto md:h-auto md:px-4 md:py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center justify-center gap-2 shrink-0';
         document.getElementById('ctrl-mic-on').classList.toggle('hidden', !state.micEnabled);
         document.getElementById('ctrl-mic-off').classList.toggle('hidden', state.micEnabled);
 
-        // Cam Button
         el.ctrlCam.className = state.camEnabled
           ? 'w-11 h-11 md:w-auto md:h-auto md:px-4 md:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white transition flex items-center justify-center gap-2 shrink-0'
           : 'w-11 h-11 md:w-auto md:h-auto md:px-4 md:py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center justify-center gap-2 shrink-0';
         document.getElementById('ctrl-cam-on').classList.toggle('hidden', !state.camEnabled);
         document.getElementById('ctrl-cam-off').classList.toggle('hidden', state.camEnabled);
 
-        // Desktop Screen Share Button
         el.ctrlScreen.className = state.screenSharing
           ? 'hidden md:flex p-3 lg:px-4 lg:py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white transition items-center gap-2 shrink-0'
           : 'hidden md:flex p-3 lg:px-4 lg:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition items-center gap-2 shrink-0';
 
-        // Desktop Hand Raise Button
         el.ctrlHand.className = state.handRaised
           ? 'hidden md:flex p-3 rounded-2xl bg-amber-500 text-slate-950 font-bold transition items-center justify-center shrink-0'
           : 'hidden md:flex p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition items-center justify-center shrink-0';
 
-        // Mobile "More Actions" Sheet States & Badge Indicator
         if (el.ctrlMoreBadge) {
           el.ctrlMoreBadge.classList.toggle('hidden', !(state.handRaised || state.screenSharing));
         }
@@ -2450,7 +2391,6 @@
 
           el.participantsList.appendChild(row);
 
-          // Add Host / Co-Host moderation buttons for other participants
           if (canModerate && !isSelf && !p.isHost) {
             const actionsContainer = row.querySelector(`#mod-actions-${CSS.escape(p.id)}`);
 
@@ -2523,6 +2463,50 @@
         }
       }
 
+      function triggerFloatingEmoji(senderPeerId, emoji) {
+        const tile = document.getElementById(`tile-${senderPeerId}`);
+        const targetContainer = tile || el.videoGrid;
+        const span = document.createElement('span');
+        span.className = 'floating-emoji';
+        span.textContent = emoji;
+        targetContainer.appendChild(span);
+        setTimeout(() => span.remove(), 2600);
+      }
+
+      /* -------------------------------------------------------------------
+       * 12. OFFLINE DEMO MODE (Robust Fallback Sandbox)
+       * ------------------------------------------------------------------- */
+      function launchOfflineDemoMode() {
+        clearLobbyError();
+        state.offlineDemo = true;
+        state.roomId = el.inputRoomId.value.trim() || 'demo-sandbox';
+        state.myName = el.inputDisplayName.value.trim() || 'Alex Rivera';
+        state.isHost = true;
+        state.isCoHost = false;
+        state.myPeerId = 'offline-host-peer';
+        state.joinedAt = Date.now();
+
+        enterCallRoom();
+
+        const dummyParticipants = [
+          { id: 'sim-1', name: 'Jordan Lee', isCoHost: true },
+          { id: 'sim-2', name: 'Taylor Swift', isCoHost: false },
+          { id: 'sim-3', name: 'Morgan Vance', isCoHost: false }
+        ];
+
+        dummyParticipants.forEach((dp, index) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 640;
+          canvas.height = 360;
+          const ctx = canvas.getContext('2d');
+          
+          setInterval(() => {
+            ctx.fillStyle = index === 0 ? '#1e293b' : index === 1 ? '#0f172a' : '#111827';
+            ctx.fillRect(0, 0, 640, 360);
+            ctx.fillStyle = '#6366f1';
+            ctx.beginPath();
+            ctx.arc(320, 140, 48, 0, Math.PI * 2);
+            ctx.fill();
             ctx.fillStyle = '#f8fafc';
             ctx.font = '600 22px Inter, sans-serif';
             ctx.textAlign = 'center';
@@ -2597,7 +2581,6 @@
        * 14. EVENT LISTENERS & INITIALIZATION
        * ------------------------------------------------------------------- */
       function bindEventListeners() {
-        // Lobby Events
         el.inputDisplayName.addEventListener('input', updateLobbyAvatarPreview);
 
         el.btnRandomRoom.addEventListener('click', () => {
@@ -2655,7 +2638,6 @@
 
         el.btnOfflineDemo.addEventListener('click', launchOfflineDemoMode);
 
-        // Header Actions
         el.btnCopyInvite.addEventListener('click', () => {
           const url = new URL(window.location.href);
           url.searchParams.set('room', state.roomId);
@@ -2671,14 +2653,12 @@
           renderVideoGrid();
         });
 
-        // Bottom Controls
         el.ctrlMic.addEventListener('click', () => toggleMicrophone());
         el.ctrlCam.addEventListener('click', () => toggleCamera());
         el.ctrlFlipCam.addEventListener('click', flipCameraFacingMode);
         el.ctrlScreen.addEventListener('click', toggleScreenShare);
         el.ctrlHand.addEventListener('click', toggleHandRaise);
 
-        // Mobile "More Actions" Sheet Events
         if (el.ctrlMore) {
           el.ctrlMore.addEventListener('click', () => toggleMoreActionsSheet());
         }
@@ -2728,7 +2708,6 @@
           }
         });
 
-        // Settings Floating Panel
         el.ctrlSettings.addEventListener('click', () => {
           el.settingsPanel.classList.toggle('hidden');
         });
@@ -2762,7 +2741,6 @@
           await switchAudioInputStream();
         });
 
-        // Drawer & Tabs
         el.ctrlDrawer.addEventListener('click', () => toggleDrawer());
         el.btnCloseDrawer.addEventListener('click', () => toggleDrawer(false));
         if (el.drawerBackdrop) {
@@ -2775,7 +2753,6 @@
           if (state.inCall) renderVideoGrid();
         });
 
-        // Chat Messaging & Emoji Picker
         el.btnToggleChatEmojis.addEventListener('click', () => {
           el.chatEmojiBar.classList.toggle('hidden');
         });
@@ -2807,7 +2784,6 @@
           el.chatEmojiBar.classList.add('hidden');
         });
 
-        // P2P File Sharing
         el.btnAttachFile.addEventListener('click', () => {
           el.chatFileInput.click();
         });
@@ -2815,7 +2791,7 @@
         el.chatFileInput.addEventListener('change', (e) => {
           const file = e.target.files && e.target.files[0];
           if (!file) return;
-          const maxBytes = 8 * 1024 * 1024; // 8 MB limit for reliable WebRTC DataChannel transfer
+          const maxBytes = 8 * 1024 * 1024;
           if (file.size > maxBytes) {
             showToast('File exceeds 8 MB P2P transfer limit.', 'error');
             el.chatFileInput.value = '';
@@ -2841,7 +2817,6 @@
           el.chatFileInput.value = '';
         });
 
-        // Leave Call & Clean Tab Close
         el.ctrlLeave.addEventListener('click', () => leaveRoom(false));
 
         window.addEventListener('beforeunload', () => {
@@ -2851,14 +2826,11 @@
         });
       }
 
-      // Bootstrap on DOM Ready
       window.addEventListener('DOMContentLoaded', () => {
-        // Auto-fill saved display name
         if (state.myName) {
           el.inputDisplayName.value = state.myName;
         }
 
-        // Auto-fill Room ID from URL query (?room=...) or hash (#room=...)
         const params = new URLSearchParams(window.location.search);
         const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
         const urlRoom = params.get('room') || hashParams.get('room');
