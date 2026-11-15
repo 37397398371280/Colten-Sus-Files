@@ -36,6 +36,14 @@
       overflow: hidden;
       height: 100dvh;
       width: 100vw;
+      max-width: 100vw;
+    }
+
+    /* Prevent iOS Safari input auto-zoom on mobile portrait */
+    @media (max-width: 767px) {
+      input, select, textarea {
+        font-size: 16px !important;
+      }
     }
 
     /* Custom Scrollbar */
@@ -113,10 +121,10 @@
     /* Responsive Video Grid Modes */
     #video-grid {
       display: grid;
-      gap: 12px;
+      gap: 10px;
       width: 100%;
       height: 100%;
-      padding: 12px;
+      padding: 10px;
       transition: all 0.3s ease;
     }
 
@@ -138,10 +146,10 @@
     }
     #video-grid.spotlight-mode .filmstrip-stage {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       overflow-x: auto;
       overflow-y: hidden;
-      height: 130px;
+      height: 112px;
       flex-shrink: 0;
     }
     @media (min-width: 1024px) {
@@ -154,7 +162,7 @@
       }
     }
     #video-grid.spotlight-mode .filmstrip-stage .video-tile {
-      min-width: 170px;
+      min-width: 145px;
       height: 100%;
       flex-shrink: 0;
     }
@@ -164,54 +172,62 @@
         height: 145px;
       }
     }
+
+    /* Safe-area bottom padding helper for iPhone home indicator */
+    .pb-safe {
+      padding-bottom: max(0.65rem, env(safe-area-inset-bottom));
+    }
+    .pt-safe {
+      padding-top: env(safe-area-inset-top);
+    }
   </style>
 </head>
 <body class="select-none">
 
   <!-- TOAST NOTIFICATION CONTAINER -->
-  <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 pointer-events-none w-full max-w-md px-4"></div>
+  <div id="toast-container" class="fixed top-3 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 pointer-events-none w-full max-w-md px-3"></div>
 
   <!-- ===================================================================== -->
   <!-- 1. LOBBY / ENTRY SCREEN                                               -->
   <!-- ===================================================================== -->
-  <div id="lobby-view" class="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#090d16] to-black">
-    <div class="w-full max-w-5xl glass-panel rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 my-auto border border-slate-800/80">
+  <div id="lobby-view" class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#090d16] to-black">
+    <div class="w-full max-w-5xl glass-panel rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 my-auto border border-slate-800/80">
       
       <!-- Left Column: Pre-Call Camera & Mic Preview -->
-      <div class="lg:col-span-7 p-5 sm:p-7 flex flex-col justify-between bg-slate-950/60 border-b lg:border-b-0 lg:border-r border-slate-800/80">
+      <div class="lg:col-span-7 p-4 sm:p-7 flex flex-col justify-between bg-slate-950/60 border-b lg:border-b-0 lg:border-r border-slate-800/80">
         <div>
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-2.5">
-              <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <div class="flex items-center justify-between gap-2 mb-3 sm:mb-4">
+            <div class="flex items-center gap-2 min-w-0">
+              <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 shrink-0">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
               </div>
-              <div>
-                <h1 class="text-lg font-bold tracking-tight text-white">NexusMeet</h1>
-                <p class="text-xs text-slate-400">Zero-Server P2P Mesh Video & Chat</p>
+              <div class="min-w-0">
+                <h1 class="text-base sm:text-lg font-bold tracking-tight text-white truncate">NexusMeet</h1>
+                <p class="text-[11px] sm:text-xs text-slate-400 truncate">P2P Mesh Video & Chat</p>
               </div>
             </div>
-            <span id="lobby-device-badge" class="text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              Checking media...
+            <span id="lobby-device-badge" class="text-[11px] font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+              Checking...
             </span>
           </div>
 
           <!-- Video Preview Box -->
-          <div class="relative w-full aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center">
+          <div class="relative w-full aspect-video max-h-[34vh] sm:max-h-none bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center">
             <video id="lobby-video" autoplay muted playsinline class="w-full h-full object-cover mirror-video"></video>
             
             <!-- Fallback Avatar when video is off or unavailable -->
-            <div id="lobby-avatar-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-900/95 p-4 text-center">
-              <div id="lobby-avatar-circle" class="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-2xl font-bold text-white shadow-xl mb-3">
+            <div id="lobby-avatar-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-900/95 p-3 text-center">
+              <div id="lobby-avatar-circle" class="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xl sm:text-2xl font-bold text-white shadow-xl mb-2">
                 U
               </div>
-              <p id="lobby-media-status-text" class="text-sm font-medium text-slate-300">Camera is turned off</p>
-              <p id="lobby-media-subtext" class="text-xs text-slate-500 mt-1 max-w-xs">You can still join in Audio or Listen-Only mode.</p>
+              <p id="lobby-media-status-text" class="text-xs sm:text-sm font-medium text-slate-300">Camera is turned off</p>
+              <p id="lobby-media-subtext" class="text-[11px] text-slate-500 mt-0.5 max-w-xs">You can still join in Audio or Listen-Only mode.</p>
             </div>
 
             <!-- Mic Audio Level Bar -->
-            <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-slate-950/75 backdrop-blur-md border border-white/10">
+            <div class="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-xl bg-slate-950/80 backdrop-blur-md border border-white/10">
               <div class="flex items-center gap-2 flex-1 min-w-0">
                 <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -222,7 +238,7 @@
               </div>
 
               <!-- Pre-call Quick Toggles -->
-              <div class="flex items-center gap-2 shrink-0">
+              <div class="flex items-center gap-1.5 shrink-0">
                 <button type="button" id="lobby-toggle-mic" title="Toggle Microphone" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition">
                   <svg id="lobby-mic-icon-on" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -246,16 +262,16 @@
         </div>
 
         <!-- Device Selectors -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-          <div>
-            <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Camera</label>
-            <select id="lobby-camera-select" class="w-full bg-slate-900 border border-slate-700/80 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500">
+        <div class="grid grid-cols-2 gap-2.5 mt-3 sm:mt-4">
+          <div class="min-w-0">
+            <label class="block text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Camera</label>
+            <select id="lobby-camera-select" class="w-full bg-slate-900 border border-slate-700/80 text-slate-200 text-xs rounded-xl px-2.5 py-2 focus:outline-none focus:border-indigo-500 truncate">
               <option value="">Default Camera</option>
             </select>
           </div>
-          <div>
-            <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Microphone</label>
-            <select id="lobby-mic-select" class="w-full bg-slate-900 border border-slate-700/80 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500">
+          <div class="min-w-0">
+            <label class="block text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Microphone</label>
+            <select id="lobby-mic-select" class="w-full bg-slate-900 border border-slate-700/80 text-slate-200 text-xs rounded-xl px-2.5 py-2 focus:outline-none focus:border-indigo-500 truncate">
               <option value="">Default Microphone</option>
             </select>
           </div>
@@ -263,24 +279,24 @@
       </div>
 
       <!-- Right Column: Room Join / Create Form -->
-      <div class="lg:col-span-5 p-5 sm:p-7 flex flex-col justify-center">
-        <h2 class="text-xl font-bold text-white mb-1">Join or Start a Meeting</h2>
-        <p class="text-xs text-slate-400 mb-5">Enter a room name to create a new room or join an existing session automatically.</p>
+      <div class="lg:col-span-5 p-4 sm:p-7 flex flex-col justify-center">
+        <h2 class="text-lg sm:text-xl font-bold text-white mb-1">Join or Start a Meeting</h2>
+        <p class="text-xs text-slate-400 mb-4">Enter a room name to create a new room or join an existing session automatically.</p>
 
-        <form id="join-form" class="space-y-4">
+        <form id="join-form" class="space-y-3.5">
           <div>
-            <label for="input-display-name" class="block text-xs font-medium text-slate-300 mb-1.5">Your Display Name</label>
+            <label for="input-display-name" class="block text-xs font-medium text-slate-300 mb-1">Your Display Name</label>
             <input type="text" id="input-display-name" required maxlength="28" placeholder="e.g. Alex Rivera"
               class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition" />
           </div>
 
           <div>
-            <label for="input-room-id" class="block text-xs font-medium text-slate-300 mb-1.5">Room ID</label>
+            <label for="input-room-id" class="block text-xs font-medium text-slate-300 mb-1">Room ID</label>
             <div class="flex gap-2">
               <input type="text" id="input-room-id" required maxlength="32" placeholder="e.g. design-sync-2026"
-                class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition font-mono" />
+                class="w-full min-w-0 bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition font-mono" />
               <button type="button" id="btn-random-room" title="Generate Random Room ID"
-                class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium shrink-0 transition flex items-center gap-1.5">
+                class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium shrink-0 transition flex items-center gap-1.5">
                 <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
@@ -290,7 +306,7 @@
           </div>
 
           <div>
-            <label for="input-room-password" class="block text-xs font-medium text-slate-300 mb-1.5">
+            <label for="input-room-password" class="block text-xs font-medium text-slate-300 mb-1">
               Room Password <span class="text-slate-500 font-normal">(Optional)</span>
             </label>
             <input type="password" id="input-room-password" maxlength="32" placeholder="Leave blank for open room"
@@ -322,72 +338,88 @@
   <!-- ===================================================================== -->
   <!-- 2. IN-CALL ROOM WORKSPACE                                             -->
   <!-- ===================================================================== -->
-  <div id="room-view" class="hidden fixed inset-0 flex flex-col bg-[#090d16]">
+  <div id="room-view" class="hidden fixed inset-0 flex flex-col bg-[#090d16] w-full max-w-full overflow-hidden">
     
-    <!-- Top Header Bar -->
-    <header class="h-14 px-3 sm:px-5 flex items-center justify-between border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md z-30 shrink-0">
-      <div class="flex items-center gap-2.5 min-w-0">
+    <!-- Top Header Bar (Compact Portrait-Safe Single Row) -->
+    <header class="h-14 pt-safe px-2.5 sm:px-5 flex items-center justify-between gap-2 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-md z-30 shrink-0 w-full max-w-full">
+      <div class="flex items-center gap-2 min-w-0 flex-1">
         <div class="w-8 h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
           <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
           </svg>
         </div>
-        <div class="min-w-0">
-          <div class="flex items-center gap-2">
-            <span id="header-room-id" class="font-mono text-sm font-semibold text-white truncate">room-id</span>
-            <span id="header-role-badge" class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span id="header-room-id" class="font-mono text-xs sm:text-sm font-semibold text-white truncate max-w-[130px] xs:max-w-[170px] sm:max-w-xs">room-id</span>
+            <span id="header-role-badge" class="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
               Host
             </span>
-            <span id="header-lock-badge" class="hidden text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            <span id="header-lock-badge" class="hidden text-[9px] sm:text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
               Locked
             </span>
           </div>
-          <p id="header-connection-status" class="text-[11px] text-emerald-400 flex items-center gap-1.5">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Connected • P2P Mesh</span>
+          <p id="header-connection-status" class="text-[10px] sm:text-[11px] text-emerald-400 flex items-center gap-1.5 truncate">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+            <span class="truncate">Connected • P2P Mesh</span>
           </p>
         </div>
       </div>
 
-      <!-- Right Header Actions -->
-      <div class="flex items-center gap-2">
-        <span id="call-timer" class="hidden sm:inline-block font-mono text-xs text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
+      <!-- Right Header Actions (Compact Pills) -->
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <span id="call-timer" class="hidden md:inline-block font-mono text-xs text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
           00:00
         </span>
-        <button type="button" id="btn-unpin-all" class="hidden px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-medium transition">
-          Exit Spotlight
+        <button type="button" id="btn-unpin-all" class="hidden px-2 py-1.5 rounded-lg bg-indigo-600/25 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 text-[11px] font-medium transition">
+          Unpin
         </button>
-        <button type="button" id="btn-copy-invite" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition">
+        <!-- Compact Participant Count Pill -->
+        <button type="button" id="btn-header-people" title="View Participants" class="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-medium flex items-center gap-1 transition">
+          <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span id="header-participants-count" class="font-mono text-[11px]">1</span>
+        </button>
+        <!-- Compact Copy Invite Button -->
+        <button type="button" id="btn-copy-invite" title="Copy Room Invite Link" class="p-2 sm:px-3 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition">
           <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
           </svg>
-          <span class="hidden sm:inline">Copy Invite</span>
+          <span class="hidden sm:inline">Invite</span>
         </button>
       </div>
     </header>
 
-    <!-- Main Stage + Collapsible Side Drawer -->
-    <main class="flex-1 flex min-h-0 relative overflow-hidden">
+    <!-- Main Stage + Collapsible Side Drawer / Mobile Bottom Sheet -->
+    <main class="flex-1 flex min-h-0 relative overflow-hidden w-full">
       
       <!-- Dynamic Video Grid Container -->
       <div id="stage-wrapper" class="flex-1 min-w-0 min-h-0 relative flex items-center justify-center">
         <div id="video-grid"></div>
       </div>
 
-      <!-- Side Drawer (Chat & Participants) -->
-      <aside id="side-drawer" class="hidden fixed inset-y-14 right-0 w-full sm:w-96 sm:static sm:inset-auto glass-panel border-l border-slate-800 flex flex-col z-40 shadow-2xl">
+      <!-- Mobile Backdrop for Chat/Participants Sheet -->
+      <div id="drawer-backdrop" class="hidden md:hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-40"></div>
+
+      <!-- Side Drawer (Desktop) / Slide-Up Sheet (Mobile Portrait) -->
+      <aside id="side-drawer" class="hidden fixed inset-x-0 bottom-0 h-[84dvh] rounded-t-3xl md:rounded-none md:static md:inset-auto md:h-auto w-full md:w-96 glass-panel border-t md:border-t-0 md:border-l border-slate-700/80 flex flex-col z-50 shadow-2xl">
+        <!-- Mobile Drag Pill -->
+        <div class="md:hidden w-full flex justify-center pt-2 pb-1 shrink-0">
+          <div class="w-10 h-1 rounded-full bg-slate-600"></div>
+        </div>
+
         <!-- Drawer Tabs -->
-        <div class="flex items-center border-b border-slate-800 p-2 gap-1 shrink-0">
+        <div class="flex items-center border-b border-slate-800 px-3 py-2 gap-1.5 shrink-0">
           <button type="button" id="tab-btn-chat" class="flex-1 py-2 px-3 rounded-xl text-xs font-semibold bg-indigo-600 text-white transition flex items-center justify-center gap-1.5">
             <span>Chat</span>
             <span id="tab-chat-badge" class="hidden px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px]">0</span>
           </button>
           <button type="button" id="tab-btn-participants" class="flex-1 py-2 px-3 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/60 transition flex items-center justify-center gap-1.5">
-            <span>Participants</span>
+            <span>People</span>
             <span id="tab-participants-count" class="px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300 text-[10px]">1</span>
           </button>
-          <button type="button" id="btn-close-drawer" class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition sm:hidden">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <button type="button" id="btn-close-drawer" title="Close Panel" class="p-2 rounded-xl bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700 transition md:hidden">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -408,32 +440,32 @@
 
           <!-- Quick Emoji Picker Strip -->
           <div id="chat-emoji-bar" class="hidden px-3 py-2 border-t border-slate-800/80 bg-slate-900/90 flex items-center justify-between text-lg shrink-0">
-            <button type="button" class="chat-emoji-insert hover:scale-125 transition">👍</button>
-            <button type="button" class="chat-emoji-insert hover:scale-125 transition">👏</button>
-            <button type="button" class="chat-emoji-insert hover:scale-125 transition">😂</button>
-            <button type="button" class="chat-emoji-insert hover:scale-125 transition">🔥</button>
-            <button type="button" class="chat-emoji-insert hover:scale-125 transition">❤️</button>
-            <button type="button" class="chat-emoji-insert hover:scale-125 transition">🎉</button>
-            <button type="button" class="chat-emoji-insert hover:scale-125 transition">🚀</button>
-            <button type="button" class="chat-emoji-insert hover:scale-125 transition">✅</button>
+            <button type="button" class="chat-emoji-insert hover:scale-125 transition p-1">👍</button>
+            <button type="button" class="chat-emoji-insert hover:scale-125 transition p-1">👏</button>
+            <button type="button" class="chat-emoji-insert hover:scale-125 transition p-1">😂</button>
+            <button type="button" class="chat-emoji-insert hover:scale-125 transition p-1">🔥</button>
+            <button type="button" class="chat-emoji-insert hover:scale-125 transition p-1">❤️</button>
+            <button type="button" class="chat-emoji-insert hover:scale-125 transition p-1">🎉</button>
+            <button type="button" class="chat-emoji-insert hover:scale-125 transition p-1">🚀</button>
+            <button type="button" class="chat-emoji-insert hover:scale-125 transition p-1">✅</button>
           </div>
 
           <!-- Chat Input Form -->
-          <form id="chat-form" class="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center gap-2 shrink-0">
+          <form id="chat-form" class="p-3 pb-safe border-t border-slate-800 bg-slate-950/75 flex items-center gap-2 shrink-0">
             <input type="file" id="chat-file-input" class="hidden" />
-            <button type="button" id="btn-attach-file" title="Share File or Image (Max 8MB)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition shrink-0">
+            <button type="button" id="btn-attach-file" title="Share File or Image (Max 8MB)" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition shrink-0">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
               </svg>
             </button>
-            <button type="button" id="btn-toggle-chat-emojis" title="Insert Emoji" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition shrink-0">
+            <button type="button" id="btn-toggle-chat-emojis" title="Insert Emoji" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition shrink-0">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </button>
             <input type="text" id="chat-input" placeholder="Send a message..." autocomplete="off"
-              class="flex-1 min-w-0 bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
-            <button type="submit" class="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition shrink-0">
+              class="flex-1 min-w-0 bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
+            <button type="submit" class="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition shrink-0">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
@@ -454,12 +486,59 @@
             </button>
           </div>
 
-          <div id="participants-list" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
+          <div id="participants-list" class="flex-1 overflow-y-auto p-3 pb-safe space-y-2"></div>
         </div>
       </aside>
     </main>
 
-    <!-- Floating Reaction Picker Popover -->
+    <!-- Mobile Portrait "More Actions" Bottom Sheet -->
+    <div id="more-actions-backdrop" class="hidden md:hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-40"></div>
+    <div id="more-actions-sheet" class="hidden md:hidden fixed inset-x-0 bottom-0 z-50 glass-panel rounded-t-3xl border-t border-slate-700/90 p-4 pb-safe shadow-2xl">
+      <div class="w-10 h-1 rounded-full bg-slate-600 mx-auto mb-3"></div>
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Quick Reactions</span>
+        <button type="button" id="btn-close-more-sheet" class="p-1.5 rounded-lg bg-slate-800 text-slate-300">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <!-- Inline Quick Emoji Row -->
+      <div class="grid grid-cols-6 gap-2 mb-4 bg-slate-900/80 p-2 rounded-2xl border border-slate-800">
+        <button type="button" data-emoji="👍" class="reaction-btn text-2xl py-1.5 rounded-xl hover:bg-slate-800 active:scale-90 transition">👍</button>
+        <button type="button" data-emoji="👏" class="reaction-btn text-2xl py-1.5 rounded-xl hover:bg-slate-800 active:scale-90 transition">👏</button>
+        <button type="button" data-emoji="❤️" class="reaction-btn text-2xl py-1.5 rounded-xl hover:bg-slate-800 active:scale-90 transition">❤️</button>
+        <button type="button" data-emoji="😂" class="reaction-btn text-2xl py-1.5 rounded-xl hover:bg-slate-800 active:scale-90 transition">😂</button>
+        <button type="button" data-emoji="😮" class="reaction-btn text-2xl py-1.5 rounded-xl hover:bg-slate-800 active:scale-90 transition">😮</button>
+        <button type="button" data-emoji="🎉" class="reaction-btn text-2xl py-1.5 rounded-xl hover:bg-slate-800 active:scale-90 transition">🎉</button>
+      </div>
+
+      <!-- Secondary Controls Grid -->
+      <div class="grid grid-cols-3 gap-2.5 text-xs">
+        <button type="button" id="sheet-btn-screen" class="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-slate-900 border border-slate-800 text-slate-200 active:scale-95 transition">
+          <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <span id="sheet-screen-label" class="font-medium">Present</span>
+        </button>
+
+        <button type="button" id="sheet-btn-hand" class="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-slate-900 border border-slate-800 text-slate-200 active:scale-95 transition">
+          <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+          </svg>
+          <span id="sheet-hand-label" class="font-medium">Raise Hand</span>
+        </button>
+
+        <button type="button" id="sheet-btn-settings" class="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-slate-900 border border-slate-800 text-slate-200 active:scale-95 transition">
+          <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+          </svg>
+          <span class="font-medium">Settings</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Desktop Floating Reaction Picker Popover -->
     <div id="reaction-popover" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-700">
       <button type="button" data-emoji="👍" class="reaction-btn text-2xl hover:scale-125 active:scale-95 transition">👍</button>
       <button type="button" data-emoji="👏" class="reaction-btn text-2xl hover:scale-125 active:scale-95 transition">👏</button>
@@ -469,8 +548,8 @@
       <button type="button" data-emoji="🎉" class="reaction-btn text-2xl hover:scale-125 active:scale-95 transition">🎉</button>
     </div>
 
-    <!-- Draggable Floating Audio/Video Settings Panel -->
-    <div id="settings-floating-panel" class="hidden fixed top-20 left-4 sm:left-8 w-80 max-w-[calc(100vw-2rem)] glass-panel rounded-2xl shadow-2xl z-50 border border-slate-700/90 overflow-hidden">
+    <!-- Draggable / Centered Responsive Audio & Video Settings Panel -->
+    <div id="settings-floating-panel" class="hidden fixed top-16 left-3 right-3 mx-auto md:mx-0 md:right-auto md:top-20 md:left-8 w-[calc(100vw-24px)] max-w-sm glass-panel rounded-2xl shadow-2xl z-50 border border-slate-700/90 overflow-hidden">
       <div id="settings-drag-handle" class="px-4 py-3 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between cursor-move">
         <div class="flex items-center gap-2">
           <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -515,11 +594,11 @@
       </div>
     </div>
 
-    <!-- Bottom Control Bar -->
-    <footer class="h-20 px-2 sm:px-6 border-t border-slate-800/90 bg-slate-950/90 backdrop-blur-lg flex items-center justify-center gap-1.5 sm:gap-3 z-30 shrink-0">
+    <!-- Bottom Control Bar (Zero-Overflow 6-Button Portrait Dock + Expanded Desktop Bar) -->
+    <footer class="pt-2.5 pb-safe px-3 sm:px-6 border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-lg flex items-center justify-between md:justify-center gap-1.5 sm:gap-3 z-30 shrink-0 w-full max-w-full">
       
-      <!-- Mic Toggle -->
-      <button type="button" id="ctrl-mic" title="Mute / Unmute Mic" class="ctrl-btn p-3 sm:px-4 sm:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white transition flex items-center gap-2">
+      <!-- 1. Mic Toggle -->
+      <button type="button" id="ctrl-mic" title="Mute / Unmute Mic" class="w-11 h-11 md:w-auto md:h-auto md:px-4 md:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white transition flex items-center justify-center gap-2 shrink-0">
         <svg id="ctrl-mic-on" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
         </svg>
@@ -530,8 +609,8 @@
         <span class="hidden md:inline text-xs font-medium">Mic</span>
       </button>
 
-      <!-- Camera Toggle -->
-      <button type="button" id="ctrl-cam" title="Turn Camera On / Off" class="ctrl-btn p-3 sm:px-4 sm:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white transition flex items-center gap-2">
+      <!-- 2. Camera Toggle -->
+      <button type="button" id="ctrl-cam" title="Turn Camera On / Off" class="w-11 h-11 md:w-auto md:h-auto md:px-4 md:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white transition flex items-center justify-center gap-2 shrink-0">
         <svg id="ctrl-cam-on" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
         </svg>
@@ -541,53 +620,58 @@
         <span class="hidden md:inline text-xs font-medium">Video</span>
       </button>
 
-      <!-- Flip Camera (Mobile / Multi-Cam) -->
-      <button type="button" id="ctrl-flip-cam" title="Flip Front / Rear Camera" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition">
+      <!-- 3. Flip Camera -->
+      <button type="button" id="ctrl-flip-cam" title="Flip Front / Rear Camera" class="w-11 h-11 md:w-auto md:h-auto md:p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center justify-center shrink-0">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
       </button>
 
-      <!-- Screen Share -->
-      <button type="button" id="ctrl-screen" title="Share Screen" class="p-3 sm:px-4 sm:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center gap-2">
+      <!-- 4. Mobile Portrait "More Actions" Button -->
+      <button type="button" id="ctrl-more" title="More Actions" class="relative md:hidden w-11 h-11 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+        </svg>
+        <span id="ctrl-more-badge" class="hidden absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-slate-950"></span>
+      </button>
+
+      <!-- Desktop-Only Direct Action Buttons (Hidden on Portrait Mobile to prevent overflow) -->
+      <button type="button" id="ctrl-screen" title="Share Screen" class="hidden md:flex p-3 lg:px-4 lg:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition items-center gap-2 shrink-0">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
         </svg>
         <span class="hidden lg:inline text-xs font-medium">Present</span>
       </button>
 
-      <!-- Hand Raise -->
-      <button type="button" id="ctrl-hand" title="Raise / Lower Hand" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition">
+      <button type="button" id="ctrl-hand" title="Raise / Lower Hand" class="hidden md:flex p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition items-center justify-center shrink-0">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
         </svg>
       </button>
 
-      <!-- Emoji Reactions -->
-      <button type="button" id="ctrl-reactions" title="Send Reaction" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition">
+      <button type="button" id="ctrl-reactions" title="Send Reaction" class="hidden md:flex p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition items-center justify-center shrink-0">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       </button>
 
-      <!-- Settings Floating Panel Toggle -->
-      <button type="button" id="ctrl-settings" title="Audio & Video Settings" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition">
+      <button type="button" id="ctrl-settings" title="Audio & Video Settings" class="hidden md:flex p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition items-center justify-center shrink-0">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
         </svg>
       </button>
 
-      <!-- Chat & Participants Drawer Toggle -->
-      <button type="button" id="ctrl-drawer" title="Chat & Participants" class="relative p-3 sm:px-4 sm:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center gap-2">
+      <!-- 5. Chat & Participants Drawer Toggle -->
+      <button type="button" id="ctrl-drawer" title="Chat & Participants" class="relative w-11 h-11 md:w-auto md:h-auto md:px-4 md:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center justify-center gap-2 shrink-0">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
         <span class="hidden lg:inline text-xs font-medium">Chat</span>
-        <span id="ctrl-unread-dot" class="hidden absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-[10px] font-bold text-white flex items-center justify-center">0</span>
+        <span id="ctrl-unread-dot" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white flex items-center justify-center">0</span>
       </button>
 
-      <!-- Leave Call -->
-      <button type="button" id="ctrl-leave" title="Leave Meeting" class="p-3 sm:px-5 sm:py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-semibold transition flex items-center gap-2 shadow-lg shadow-rose-600/25 ml-1">
+      <!-- 6. Leave Call -->
+      <button type="button" id="ctrl-leave" title="Leave Meeting" class="h-11 px-3.5 md:px-5 md:py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-semibold transition flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/25 shrink-0">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z" />
         </svg>
@@ -695,12 +779,15 @@
         headerRoleBadge: document.getElementById('header-role-badge'),
         headerLockBadge: document.getElementById('header-lock-badge'),
         headerConnStatus: document.getElementById('header-connection-status'),
+        headerParticipantsCount: document.getElementById('header-participants-count'),
+        btnHeaderPeople: document.getElementById('btn-header-people'),
         callTimer: document.getElementById('call-timer'),
         btnUnpinAll: document.getElementById('btn-unpin-all'),
         btnCopyInvite: document.getElementById('btn-copy-invite'),
         videoGrid: document.getElementById('video-grid'),
 
         // Drawer & Tabs
+        drawerBackdrop: document.getElementById('drawer-backdrop'),
         sideDrawer: document.getElementById('side-drawer'),
         tabBtnChat: document.getElementById('tab-btn-chat'),
         tabBtnParticipants: document.getElementById('tab-btn-participants'),
@@ -721,7 +808,18 @@
         btnToggleRoomLock: document.getElementById('btn-toggle-room-lock'),
         participantsList: document.getElementById('participants-list'),
 
-        // Controls & Popovers
+        // Mobile More Actions Sheet & Controls
+        moreActionsBackdrop: document.getElementById('more-actions-backdrop'),
+        moreActionsSheet: document.getElementById('more-actions-sheet'),
+        btnCloseMoreSheet: document.getElementById('btn-close-more-sheet'),
+        ctrlMore: document.getElementById('ctrl-more'),
+        ctrlMoreBadge: document.getElementById('ctrl-more-badge'),
+        sheetBtnScreen: document.getElementById('sheet-btn-screen'),
+        sheetScreenLabel: document.getElementById('sheet-screen-label'),
+        sheetBtnHand: document.getElementById('sheet-btn-hand'),
+        sheetHandLabel: document.getElementById('sheet-hand-label'),
+        sheetBtnSettings: document.getElementById('sheet-btn-settings'),
+
         reactionPopover: document.getElementById('reaction-popover'),
         settingsPanel: document.getElementById('settings-floating-panel'),
         settingsDragHandle: document.getElementById('settings-drag-handle'),
@@ -1815,6 +1913,9 @@
         const participants = Array.from(state.participants.values());
         const count = participants.length;
         el.tabParticipantsCount.textContent = String(count);
+        if (el.headerParticipantsCount) {
+          el.headerParticipantsCount.textContent = String(count);
+        }
 
         // Determine if Spotlight mode is active
         const isSpotlight = state.pinnedPeerId && state.participants.has(state.pinnedPeerId) && count > 1;
@@ -1847,13 +1948,18 @@
           el.videoGrid.appendChild(pinnedStage);
           el.videoGrid.appendChild(filmstripStage);
         } else {
-          el.videoGrid.className = '';
-          // Responsive grid columns based on participant count
+          // Portrait-aware grid: stack 2 participants vertically (1 col x 2 rows) on narrow portrait viewports
+          const isPortraitMobile = window.innerWidth < 640 && window.innerHeight >= window.innerWidth;
           let cols = 'grid-cols-1';
-          if (count === 2) cols = 'grid-cols-1 md:grid-cols-2';
-          else if (count === 3 || count === 4) cols = 'grid-cols-1 sm:grid-cols-2';
-          else if (count >= 5 && count <= 6) cols = 'grid-cols-2 lg:grid-cols-3';
-          else if (count >= 7) cols = 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4';
+          if (count === 2) {
+            cols = isPortraitMobile ? 'grid-cols-1 grid-rows-2' : 'grid-cols-1 md:grid-cols-2';
+          } else if (count === 3 || count === 4) {
+            cols = 'grid-cols-2';
+          } else if (count >= 5 && count <= 6) {
+            cols = 'grid-cols-2 lg:grid-cols-3';
+          } else if (count >= 7) {
+            cols = 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4';
+          }
 
           el.videoGrid.className = `grid ${cols} auto-rows-fr`;
           participants.forEach(p => {
@@ -2170,54 +2276,41 @@
       function syncInCallControlButtons() {
         // Mic Button
         el.ctrlMic.className = state.micEnabled
-          ? 'ctrl-btn p-3 sm:px-4 sm:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white transition flex items-center gap-2'
-          : 'ctrl-btn p-3 sm:px-4 sm:py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center gap-2';
+          ? 'w-11 h-11 md:w-auto md:h-auto md:px-4 md:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white transition flex items-center justify-center gap-2 shrink-0'
+          : 'w-11 h-11 md:w-auto md:h-auto md:px-4 md:py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center justify-center gap-2 shrink-0';
         document.getElementById('ctrl-mic-on').classList.toggle('hidden', !state.micEnabled);
         document.getElementById('ctrl-mic-off').classList.toggle('hidden', state.micEnabled);
 
         // Cam Button
         el.ctrlCam.className = state.camEnabled
-          ? 'ctrl-btn p-3 sm:px-4 sm:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white transition flex items-center gap-2'
-          : 'ctrl-btn p-3 sm:px-4 sm:py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center gap-2';
+          ? 'w-11 h-11 md:w-auto md:h-auto md:px-4 md:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white transition flex items-center justify-center gap-2 shrink-0'
+          : 'w-11 h-11 md:w-auto md:h-auto md:px-4 md:py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center justify-center gap-2 shrink-0';
         document.getElementById('ctrl-cam-on').classList.toggle('hidden', !state.camEnabled);
         document.getElementById('ctrl-cam-off').classList.toggle('hidden', state.camEnabled);
 
-        // Screen Share Button
+        // Desktop Screen Share Button
         el.ctrlScreen.className = state.screenSharing
-          ? 'p-3 sm:px-4 sm:py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-2'
-          : 'p-3 sm:px-4 sm:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center gap-2';
+          ? 'hidden md:flex p-3 lg:px-4 lg:py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white transition items-center gap-2 shrink-0'
+          : 'hidden md:flex p-3 lg:px-4 lg:py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition items-center gap-2 shrink-0';
 
-        // Hand Raise Button
+        // Desktop Hand Raise Button
         el.ctrlHand.className = state.handRaised
-          ? 'p-3 rounded-2xl bg-amber-500 text-slate-950 font-bold transition'
-          : 'p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition';
-      }
+          ? 'hidden md:flex p-3 rounded-2xl bg-amber-500 text-slate-950 font-bold transition items-center justify-center shrink-0'
+          : 'hidden md:flex p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition items-center justify-center shrink-0';
 
-      function triggerFloatingEmoji(peerId, emoji) {
-        const tile = document.getElementById(`tile-${peerId}`);
-        if (!tile) return;
-        const span = document.createElement('span');
-        span.className = 'floating-emoji';
-        span.textContent = emoji;
-        // Slight horizontal jitter
-        const offset = Math.floor(Math.random() * 60) - 30;
-        span.style.marginLeft = `${offset}px`;
-        tile.appendChild(span);
-        setTimeout(() => span.remove(), 2700);
-      }
-
-      /* -------------------------------------------------------------------
-       * 11. SIDE DRAWER, CHAT, FILE SHARING & PARTICIPANTS LIST
-       * ------------------------------------------------------------------- */
-      function toggleDrawer(forceOpen = null, tab = null) {
-        state.drawerOpen = forceOpen !== null ? forceOpen : !state.drawerOpen;
-        el.sideDrawer.classList.toggle('hidden', !state.drawerOpen);
-
-        if (state.drawerOpen) {
-          if (tab) switchDrawerTab(tab);
-          if (state.activeTab === 'chat') {
-            clearUnreadBadge();
-          }
+        // Mobile "More Actions" Sheet States & Badge Indicator
+        if (el.ctrlMoreBadge) {
+          el.ctrlMoreBadge.classList.toggle('hidden', !(state.handRaised || state.screenSharing));
+        }
+        if (el.sheetScreenLabel) {
+          el.sheetScreenLabel.textContent = state.screenSharing ? 'Stop Share' : 'Present';
+          el.sheetBtnScreen.classList.toggle('border-emerald-500/60', state.screenSharing);
+          el.sheetBtnScreen.classList.toggle('bg-emerald-950/40', state.screenSharing);
+        }
+        if (el.sheetHandLabel) {
+          el.sheetHandLabel.textContent = state.handRaised ? 'Lower Hand' : 'Raise Hand';
+          el.sheetBtnHand.classList.toggle('border-amber-500/60', state.handRaised);
+          el.sheetBtnHand.classList.toggle('bg-amber-950/40', state.handRaised);
         }
       }
 
@@ -2405,49 +2498,30 @@
       }
 
       /* -------------------------------------------------------------------
-       * 12. OFFLINE / LOOPBACK SANDBOX FALLBACK MODE
+       * 11. SIDE DRAWER, CHAT, FILE SHARING & PARTICIPANTS LIST
        * ------------------------------------------------------------------- */
-      function launchOfflineDemoMode() {
-        const displayName = el.inputDisplayName.value.trim() || 'Alex Rivera';
-        const roomId = sanitizeRoomId(el.inputRoomId.value) || 'offline-sandbox';
-        ensureAudioContext();
+      function toggleMoreActionsSheet(forceOpen = null) {
+        const isCurrentlyHidden = el.moreActionsSheet.classList.contains('hidden');
+        const shouldOpen = forceOpen !== null ? forceOpen : isCurrentlyHidden;
+        el.moreActionsSheet.classList.toggle('hidden', !shouldOpen);
+        el.moreActionsBackdrop.classList.toggle('hidden', !shouldOpen);
+      }
 
-        state.offlineDemo = true;
-        state.roomId = roomId;
-        state.myName = displayName;
-        state.isHost = true;
-        state.myPeerId = 'local-demo-host';
-        state.joinedAt = Date.now();
+      function toggleDrawer(forceOpen = null, tab = null) {
+        state.drawerOpen = forceOpen !== null ? forceOpen : !state.drawerOpen;
+        el.sideDrawer.classList.toggle('hidden', !state.drawerOpen);
+        if (el.drawerBackdrop) {
+          el.drawerBackdrop.classList.toggle('hidden', !state.drawerOpen);
+        }
 
-        enterCallRoom();
-
-        // Add two simulated local demo participants with animated canvas streams
-        const demoPeers = [
-          { id: 'demo-peer-maya', name: 'Maya Lin', isCoHost: true, color: '#6366f1' },
-          { id: 'demo-peer-liam', name: 'Liam Vance', isCoHost: false, color: '#10b981' }
-        ];
-
-        demoPeers.forEach((dp, index) => {
-          const canvas = document.createElement('canvas');
-          canvas.width = 640;
-          canvas.height = 360;
-          const ctx = canvas.getContext('2d');
-          let phase = index * 2;
-
-          setInterval(() => {
-            if (!state.inCall || !state.offlineDemo) return;
-            phase += 0.04;
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(0, 0, 640, 360);
-
-            // Animated wave rings
-            ctx.strokeStyle = dp.color;
-            ctx.lineWidth = 3;
-            for (let r = 1; r <= 3; r++) {
-              ctx.beginPath();
-              ctx.arc(320, 180, 45 + r * 22 + Math.sin(phase + r) * 8, 0, Math.PI * 2);
-              ctx.stroke();
-            }
+        if (state.drawerOpen) {
+          toggleMoreActionsSheet(false);
+          if (tab) switchDrawerTab(tab);
+          if (state.activeTab === 'chat') {
+            clearUnreadBadge();
+          }
+        }
+      }
 
             ctx.fillStyle = '#f8fafc';
             ctx.font = '600 22px Inter, sans-serif';
@@ -2588,6 +2662,10 @@
           copyTextSafe(url.toString());
         });
 
+        if (el.btnHeaderPeople) {
+          el.btnHeaderPeople.addEventListener('click', () => toggleDrawer(true, 'participants'));
+        }
+
         el.btnUnpinAll.addEventListener('click', () => {
           state.pinnedPeerId = null;
           renderVideoGrid();
@@ -2600,6 +2678,35 @@
         el.ctrlScreen.addEventListener('click', toggleScreenShare);
         el.ctrlHand.addEventListener('click', toggleHandRaise);
 
+        // Mobile "More Actions" Sheet Events
+        if (el.ctrlMore) {
+          el.ctrlMore.addEventListener('click', () => toggleMoreActionsSheet());
+        }
+        if (el.btnCloseMoreSheet) {
+          el.btnCloseMoreSheet.addEventListener('click', () => toggleMoreActionsSheet(false));
+        }
+        if (el.moreActionsBackdrop) {
+          el.moreActionsBackdrop.addEventListener('click', () => toggleMoreActionsSheet(false));
+        }
+        if (el.sheetBtnScreen) {
+          el.sheetBtnScreen.addEventListener('click', () => {
+            toggleMoreActionsSheet(false);
+            toggleScreenShare();
+          });
+        }
+        if (el.sheetBtnHand) {
+          el.sheetBtnHand.addEventListener('click', () => {
+            toggleHandRaise();
+            toggleMoreActionsSheet(false);
+          });
+        }
+        if (el.sheetBtnSettings) {
+          el.sheetBtnSettings.addEventListener('click', () => {
+            toggleMoreActionsSheet(false);
+            el.settingsPanel.classList.remove('hidden');
+          });
+        }
+
         el.ctrlReactions.addEventListener('click', (e) => {
           e.stopPropagation();
           el.reactionPopover.classList.toggle('hidden');
@@ -2611,6 +2718,7 @@
             triggerFloatingEmoji(state.myPeerId, emoji);
             broadcastData({ type: 'reaction', emoji });
             el.reactionPopover.classList.add('hidden');
+            toggleMoreActionsSheet(false);
           });
         });
 
@@ -2657,16 +2765,14 @@
         // Drawer & Tabs
         el.ctrlDrawer.addEventListener('click', () => toggleDrawer());
         el.btnCloseDrawer.addEventListener('click', () => toggleDrawer(false));
+        if (el.drawerBackdrop) {
+          el.drawerBackdrop.addEventListener('click', () => toggleDrawer(false));
+        }
         el.tabBtnChat.addEventListener('click', () => switchDrawerTab('chat'));
         el.tabBtnParticipants.addEventListener('click', () => switchDrawerTab('participants'));
 
-        el.btnToggleRoomLock.addEventListener('click', () => {
-          if (!state.isHost) return;
-          state.roomLocked = !state.roomLocked;
-          el.btnToggleRoomLock.textContent = state.roomLocked ? 'Unlock Room' : 'Lock Room';
-          el.headerLockBadge.classList.toggle('hidden', !state.roomLocked);
-          broadcastData({ type: 'room-lock', locked: state.roomLocked });
-          appendSystemMessage(state.roomLocked ? 'You locked the room.' : 'You unlocked the room.');
+        window.addEventListener('resize', () => {
+          if (state.inCall) renderVideoGrid();
         });
 
         // Chat Messaging & Emoji Picker
