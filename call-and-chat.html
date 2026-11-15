@@ -27,12 +27,13 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #070a12; color: #f3f4f6; -webkit-tap-highlight-color: transparent; user-select: none; }
+        input, textarea { user-select: text; }
         .glass { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 9999px; }
         .mirrored { transform: scaleX(-1); }
-        .draggable-box { touch-action: none; position: absolute; z-index: 50; }
+        .draggable-box { touch-action: none; position: fixed; z-index: 50; }
         .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 1rem); }
         .safe-top { padding-top: env(safe-area-inset-top, 1rem); }
     </style>
@@ -44,26 +45,30 @@
 
     <!-- HEADER / TOP NAV -->
     <header class="h-14 px-3 sm:px-4 bg-darkBg/95 border-b border-gray-800 flex items-center justify-between shrink-0 z-30 safe-top">
-        <div class="flex items-center gap-2 sm:gap-3">
-            <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-primary to-emerald-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-primary to-emerald-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
                 <i data-lucide="video" class="w-4 h-4 sm:w-5 sm:h-5 text-white"></i>
             </div>
-            <div>
-                <h1 class="font-bold text-sm sm:text-base tracking-tight flex items-center gap-2">
+            <div class="min-w-0">
+                <h1 class="font-bold text-sm sm:text-base tracking-tight flex items-center gap-2 truncate">
                     NexusRTC
-                    <span id="roomBadge" class="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-mono">Room: Lobby</span>
-                    <span id="roleBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hidden font-bold">HOST</span>
+                    <span id="roomBadge" class="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-mono truncate">Room: Lobby</span>
+                    <span id="roleBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hidden font-bold shrink-0">HOST</span>
                 </h1>
             </div>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 shrink-0">
             <span id="signalStatusBadge" class="text-[10px] px-2 py-1 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 font-mono hidden sm:inline-block">Signal: Offline</span>
-            <button id="hostSettingsHeaderBtn" class="hidden px-2.5 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-semibold transition-all flex items-center gap-1.5">
+            <button type="button" id="copyInviteBtn" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-all flex items-center gap-1.5" title="Copy Room Link">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">Invite</span>
+            </button>
+            <button type="button" id="hostSettingsHeaderBtn" class="hidden px-2.5 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-semibold transition-all flex items-center gap-1.5">
                 <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
                 <span class="hidden sm:inline">Host Panel</span>
             </button>
-            <button id="headerLeaveRoomBtn" class="px-3 py-1.5 rounded-lg bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600 hover:text-white text-xs font-semibold transition-all">
+            <button type="button" id="headerLeaveRoomBtn" class="px-3 py-1.5 rounded-lg bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600 hover:text-white text-xs font-semibold transition-all">
                 Leave
             </button>
         </div>
@@ -85,7 +90,7 @@
                     </div>
 
                     <div class="flex items-center gap-1.5 pointer-events-auto">
-                        <button id="toggleStatsBtn" class="p-2 sm:px-3 sm:py-1.5 rounded-xl glass text-xs font-medium hover:bg-gray-800 flex items-center gap-1.5 transition-all" title="Telemetry Stats">
+                        <button type="button" id="toggleStatsBtn" class="p-2 sm:px-3 sm:py-1.5 rounded-xl glass text-xs font-medium hover:bg-gray-800 flex items-center gap-1.5 transition-all" title="Telemetry Stats">
                             <i data-lucide="activity" class="w-3.5 h-3.5 text-emerald-400"></i>
                             <span class="hidden sm:inline">Telemetry</span>
                         </button>
@@ -102,7 +107,7 @@
                 </div>
 
                 <!-- DYNAMIC RESPONSIVE MESH VIDEO GRID -->
-                <div id="videoGrid" class="flex-1 grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 auto-rows-fr items-center justify-center overflow-y-auto p-1">
+                <div id="videoGrid" class="flex-1 grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 auto-rows-fr items-center justify-center overflow-y-auto p-1 pt-10 pb-16">
                     
                     <!-- Local Video Tile -->
                     <div id="localTile" class="relative w-full h-full min-h-[180px] sm:min-h-[220px] rounded-xl overflow-hidden bg-gray-900 border-2 border-gray-800 flex items-center justify-center shadow-lg group">
@@ -128,62 +133,46 @@
                 <!-- FLOATING REACTIONS LAYER -->
                 <div id="reactionsLayer" class="absolute inset-0 pointer-events-none overflow-hidden z-20"></div>
 
-                <!-- MOVABLE FILTER PICKER POPUP -->
-                <div id="filterPickerBox" class="draggable-box bottom-20 left-1/2 transform -translate-x-1/2 glass rounded-2xl p-3 hidden shadow-2xl max-w-xs border border-gray-700">
-                    <div class="flex justify-between items-center mb-2 cursor-move drag-handle border-b border-gray-700 pb-1.5">
-                        <span class="text-xs font-bold text-indigo-300 flex items-center gap-1.5"><i data-lucide="wand-2" class="w-3.5 h-3.5"></i> Video Filters (Draggable)</span>
-                        <button type="button" id="closeFilterBox" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
-                    </div>
-                    <div class="flex flex-wrap gap-1.5 justify-center">
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-primary text-white" data-filter="none">Normal</button>
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="sepia(0.6) contrast(1.2)">Warm</button>
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="grayscale(1) contrast(1.4)">Noir</button>
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="invert(0.9) hue-rotate(180deg)">Invert</button>
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="blur(3px)">Blur</button>
-                        <button class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="brightness(1.4) saturate(1.5)">Bright</button>
-                    </div>
-                </div>
-
                 <!-- REACTION EMOJI PICKER POPUP -->
                 <div id="reactionPicker" class="absolute bottom-20 left-1/2 transform -translate-x-1/2 glass rounded-full px-3 py-2 hidden flex gap-2 sm:gap-3 z-30 shadow-2xl">
-                    <button class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="👍">👍</button>
-                    <button class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="❤️">❤️</button>
-                    <button class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="😂">😂</button>
-                    <button class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="🎉">🎉</button>
-                    <button class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="🔥">🔥</button>
+                    <button type="button" class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="👍">👍</button>
+                    <button type="button" class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="❤️">❤️</button>
+                    <button type="button" class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="😂">😂</button>
+                    <button type="button" class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="🎉">🎉</button>
+                    <button type="button" class="reaction-emoji text-lg sm:text-xl hover:scale-125 transition-transform" data-emoji="🔥">🔥</button>
                 </div>
 
                 <!-- BOTTOM CONTROL DOCK (Touch Optimized) -->
                 <div class="absolute bottom-2.5 left-1/2 transform -translate-x-1/2 glass rounded-2xl px-3 py-2 flex items-center gap-1.5 sm:gap-2 z-30 shadow-2xl">
-                    <button id="btnMic" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Mute/Unmute Mic">
-                        <i data-lucide="mic" class="w-4 h-4 sm:w-5 sm:h-5" id="iconMic"></i>
+                    <button type="button" id="btnMic" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Mute/Unmute Mic">
+                        <i data-lucide="mic" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
-                    <button id="btnCam" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Camera On/Off">
-                        <i data-lucide="video" class="w-4 h-4 sm:w-5 sm:h-5" id="iconCam"></i>
+                    <button type="button" id="btnCam" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Camera On/Off">
+                        <i data-lucide="video" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
-                    <button id="btnFlipCam" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Flip Front/Rear Camera">
+                    <button type="button" id="btnFlipCam" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Flip Front/Rear Camera">
                         <i data-lucide="switch-camera" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
-                    <button id="btnScreen" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 hidden sm:flex items-center justify-center transition-all text-white" title="Share Screen">
+                    <button type="button" id="btnScreen" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 hidden sm:flex items-center justify-center transition-all text-white" title="Share Screen">
                         <i data-lucide="monitor-up" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
-                    <button id="btnHand" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Raise Hand">
+                    <button type="button" id="btnHand" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Raise Hand">
                         <i data-lucide="hand" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
-                    <button id="btnFilters" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Video Filters">
+                    <button type="button" id="btnFilters" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Video Filters">
                         <i data-lucide="wand-2" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
-                    <button id="btnReactions" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Reactions">
+                    <button type="button" id="btnReactions" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white" title="Reactions">
                         <i data-lucide="smile" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
 
                     <div class="w-px h-5 bg-gray-700 mx-0.5"></div>
 
-                    <button id="btnToggleSidebar" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-primary hover:bg-primaryHover flex items-center justify-center transition-all text-white relative" title="Chat & Participants">
+                    <button type="button" id="btnToggleSidebar" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-primary hover:bg-primaryHover flex items-center justify-center transition-all text-white relative" title="Chat & Participants">
                         <i data-lucide="message-square" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                         <span id="sidebarBadge" class="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center hidden">0</span>
                     </button>
-                    <button id="btnLeaveCall" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white shadow-lg shadow-red-600/30" title="Leave">
+                    <button type="button" id="btnLeaveCall" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white shadow-lg shadow-red-600/30" title="Leave">
                         <i data-lucide="phone-off" class="w-4 h-4 sm:w-5 sm:h-5"></i>
                     </button>
                 </div>
@@ -192,14 +181,14 @@
         </main>
 
         <!-- SIDEBAR: CHAT, FILES & PARTICIPANTS -->
-        <aside id="sidebar" class="absolute md:relative inset-y-0 right-0 w-full sm:w-80 md:w-96 bg-darkSurface border-l border-gray-800 flex flex-col z-40 transform translate-x-full md:translate-x-0 transition-transform duration-300 shadow-2xl">
+        <aside id="sidebar" class="fixed md:relative inset-y-0 right-0 w-full sm:w-80 md:w-96 bg-darkSurface border-l border-gray-800 flex flex-col z-40 transform translate-x-full md:translate-x-0 transition-transform duration-300 shadow-2xl">
             <!-- Sidebar Header Tabs -->
             <div class="h-14 border-b border-gray-800 px-4 flex items-center justify-between shrink-0">
                 <div class="flex bg-gray-900 p-1 rounded-xl border border-gray-800">
-                    <button id="tabChatBtn" class="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white transition-all">Chat & Files</button>
-                    <button id="tabParticipantsBtn" class="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">Peers (<span id="participantTabCount">1</span>)</button>
+                    <button type="button" id="tabChatBtn" class="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white transition-all">Chat & Files</button>
+                    <button type="button" id="tabParticipantsBtn" class="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">Peers (<span id="participantTabCount">1</span>)</button>
                 </div>
-                <button id="closeSidebarBtn" class="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white md:hidden">
+                <button type="button" id="closeSidebarBtn" class="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white md:hidden">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -227,7 +216,7 @@
                 <div>
                     <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex justify-between items-center">
                         <span>Connected Participants</span>
-                        <button type="button" id="openDeviceSettingsBoxBtn" class="text-primary hover:underline text-[10px]">⚙️ Open Device Box</button>
+                        <button type="button" id="openDeviceSettingsBoxBtn" class="text-primary hover:underline text-[10px]">⚙️ Device Settings</button>
                     </div>
                     <div id="participantsList" class="space-y-2"></div>
                 </div>
@@ -236,10 +225,26 @@
 
     </div>
 
+    <!-- MOVABLE FILTER PICKER POPUP -->
+    <div id="filterPickerBox" class="draggable-box bottom-24 left-1/2 transform -translate-x-1/2 glass rounded-2xl p-3 hidden shadow-2xl w-72 max-w-[90vw] border border-gray-700">
+        <div class="flex justify-between items-center mb-2 cursor-move drag-handle border-b border-gray-700 pb-1.5">
+            <span class="text-xs font-bold text-indigo-300 flex items-center gap-1.5"><i data-lucide="wand-2" class="w-3.5 h-3.5"></i> Video Filters</span>
+            <button type="button" id="closeFilterBox" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+        </div>
+        <div class="flex flex-wrap gap-1.5 justify-center">
+            <button type="button" class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-primary text-white" data-filter="none">Normal</button>
+            <button type="button" class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="sepia(0.6) contrast(1.2)">Warm</button>
+            <button type="button" class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="grayscale(1) contrast(1.4)">Noir</button>
+            <button type="button" class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="invert(0.9) hue-rotate(180deg)">Invert</button>
+            <button type="button" class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="blur(3px)">Blur</button>
+            <button type="button" class="filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300" data-filter="brightness(1.4) saturate(1.5)">Bright</button>
+        </div>
+    </div>
+
     <!-- MOVABLE DEVICE & CAMERA SETTINGS BOX -->
-    <div id="deviceSettingsBox" class="draggable-box top-20 left-10 w-80 glass rounded-2xl p-4 hidden shadow-2xl border border-gray-700">
+    <div id="deviceSettingsBox" class="draggable-box top-20 left-6 w-80 max-w-[90vw] glass rounded-2xl p-4 hidden shadow-2xl border border-gray-700">
         <div class="flex justify-between items-center mb-3 cursor-move drag-handle border-b border-gray-700 pb-2">
-            <span class="text-xs font-bold text-indigo-300 flex items-center gap-1.5"><i data-lucide="settings" class="w-4 h-4"></i> Camera & Audio Settings (Draggable)</span>
+            <span class="text-xs font-bold text-indigo-300 flex items-center gap-1.5"><i data-lucide="settings" class="w-4 h-4"></i> Camera & Audio Settings</span>
             <button type="button" id="closeDeviceBox" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
         </div>
         <div class="space-y-3 text-xs">
@@ -370,19 +375,7 @@
             // ---------------------------------------------------------
             const ICE_SERVERS = {
                 iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun.relay.metered.ca:80' },
-                    {
-                        urls: 'turn:global.relay.metered.ca:80',
-                        username: 'e8dd65b92f62d3e36cab392b',
-                        credential: 'uWdWNmkhvyqTEAcO'
-                    },
-                    {
-                        urls: 'turn:global.relay.metered.ca:443?transport=tcp',
-                        username: 'e8dd65b92f62d3e36cab392b',
-                        credential: 'uWdWNmkhvyqTEAcO'
-                    }
+                    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }
                 ],
                 iceCandidatePoolSize: 10
             };
@@ -394,6 +387,7 @@
 
             const FILE_CHUNK_SIZE = 16384;
             const MAX_FILE_SIZE = 10 * 1024 * 1024;
+            const PEER_STALE_MS = 12000;
 
             const state = {
                 localPeerId: 'p_' + Math.random().toString(36).substring(2, 9) + '_' + Math.floor(Math.random() * 10000),
@@ -412,14 +406,18 @@
                 localStream: null,
                 screenStream: null,
                 useFacingMode: 'user',
+                activeFilter: 'none',
                 peers: new Map(),
                 bc: null,
                 presenceInterval: null,
                 statsInterval: null,
+                healthCheckInterval: null,
                 mqttWs: null,
                 mqttConnected: false,
                 mqttBrokerIndex: 0,
                 mqttReconnectTimer: null,
+                mqttPingInterval: null,
+                mqttRxBuffer: new Uint8Array(0),
                 micEnabled: true,
                 camEnabled: true,
                 handRaised: false,
@@ -451,6 +449,7 @@
                 roomBadge: $('roomBadge'),
                 roleBadge: $('roleBadge'),
                 signalStatusBadge: $('signalStatusBadge'),
+                copyInviteBtn: $('copyInviteBtn'),
                 hostSettingsHeaderBtn: $('hostSettingsHeaderBtn'),
                 headerLeaveRoomBtn: $('headerLeaveRoomBtn'),
                 callTimer: $('callTimer'),
@@ -471,9 +470,7 @@
                 closeFilterBox: $('closeFilterBox'),
                 reactionPicker: $('reactionPicker'),
                 btnMic: $('btnMic'),
-                iconMic: $('iconMic'),
                 btnCam: $('btnCam'),
-                iconCam: $('iconCam'),
                 btnFlipCam: $('btnFlipCam'),
                 boxFlipCamBtn: $('boxFlipCamBtn'),
                 btnScreen: $('btnScreen'),
@@ -508,8 +505,14 @@
                 toastContainer: $('toastContainer')
             };
 
+            function setButtonIcon(buttonEl, iconName) {
+                if (!buttonEl) return;
+                buttonEl.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4 sm:w-5 sm:h-5"></i>`;
+                lucide.createIcons({ nodes: [buttonEl] });
+            }
+
             // ---------------------------------------------------------
-            // DRAGGABLE / MOVABLE BOXES LOGIC
+            // DRAGGABLE / MOVABLE BOXES LOGIC (CLAMPED TO VIEWPORT)
             // ---------------------------------------------------------
             function makeDraggable(boxEl) {
                 let isDragging = false, startX, startY, initialX, initialY;
@@ -527,13 +530,15 @@
                 function dragStart(e) {
                     if (e.target.closest('button')) return;
                     isDragging = true;
-                    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-                    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                    const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0].clientX);
+                    const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0].clientY);
                     startX = clientX;
                     startY = clientY;
                     const rect = boxEl.getBoundingClientRect();
                     boxEl.style.left = rect.left + 'px';
                     boxEl.style.top = rect.top + 'px';
+                    boxEl.style.bottom = 'auto';
+                    boxEl.style.right = 'auto';
                     boxEl.style.transform = 'none';
                     initialX = rect.left;
                     initialY = rect.top;
@@ -542,12 +547,15 @@
 
                 function drag(e) {
                     if (!isDragging) return;
-                    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-                    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-                    const dx = clientX - startX;
-                    const dy = clientY - startY;
-                    boxEl.style.left = (initialX + dx) + 'px';
-                    boxEl.style.top = (initialY + dy) + 'px';
+                    const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0].clientX);
+                    const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0].clientY);
+                    const rect = boxEl.getBoundingClientRect();
+                    const maxLeft = Math.max(0, window.innerWidth - rect.width);
+                    const maxTop = Math.max(0, window.innerHeight - rect.height);
+                    const nextLeft = Math.min(maxLeft, Math.max(0, initialX + (clientX - startX)));
+                    const nextTop = Math.min(maxTop, Math.max(0, initialY + (clientY - startY)));
+                    boxEl.style.left = nextLeft + 'px';
+                    boxEl.style.top = nextTop + 'px';
                     if (e.type === 'touchmove') e.preventDefault();
                 }
 
@@ -574,7 +582,7 @@
             // ---------------------------------------------------------
             function showToast(message, type = 'info') {
                 const toast = document.createElement('div');
-                toast.className = `px-3.5 py-2.5 rounded-xl text-xs font-semibold glass text-white shadow-xl pointer-events-auto transition-all animate-bounce flex items-center gap-2 border ${
+                toast.className = `px-3.5 py-2.5 rounded-xl text-xs font-semibold glass text-white shadow-xl pointer-events-auto transition-opacity duration-300 flex items-center gap-2 border ${
                     type === 'error' ? 'border-red-500/50 bg-red-950/90' : 'border-indigo-500/50 bg-gray-900/95'
                 }`;
                 const span = document.createElement('span');
@@ -615,6 +623,15 @@
                     ? 'text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono hidden sm:inline-block'
                     : 'text-[10px] px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono hidden sm:inline-block';
             }
+
+            els.copyInviteBtn.addEventListener('click', () => {
+                const inviteUrl = window.location.href;
+                navigator.clipboard.writeText(inviteUrl).then(() => {
+                    showToast('Room link copied to clipboard!');
+                }).catch(() => {
+                    prompt('Copy room link:', inviteUrl);
+                });
+            });
 
             // ---------------------------------------------------------
             // TELEMETRY DRAWER
@@ -706,20 +723,24 @@
             // ---------------------------------------------------------
             async function initLocalCamera(constraints = null) {
                 try {
-                    if (state.localStream) {
-                        state.localStream.getTracks().forEach(t => t.stop());
-                    }
+                    const oldStream = state.localStream;
                     const defaultConstraints = {
                         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: state.useFacingMode },
                         audio: { echoCancellation: true, noiseSuppression: true }
                     };
-                    state.localStream = await navigator.mediaDevices.getUserMedia(constraints || defaultConstraints);
+                    const newStream = await navigator.mediaDevices.getUserMedia(constraints || defaultConstraints);
+                    if (oldStream) {
+                        oldStream.getTracks().forEach(t => t.stop());
+                    }
+                    state.localStream = newStream;
                     state.localStream.getAudioTracks().forEach(t => t.enabled = state.micEnabled);
                     state.localStream.getVideoTracks().forEach(t => t.enabled = state.camEnabled);
 
-                    els.localVideo.srcObject = state.localStream;
-                    els.localPlaceholder.classList.toggle('hidden', state.camEnabled);
-                    updateLocalVideoMirror();
+                    if (!state.isScreenSharing) {
+                        els.localVideo.srcObject = state.localStream;
+                        els.localPlaceholder.classList.toggle('hidden', state.camEnabled);
+                        updateLocalVideoMirror();
+                    }
                     setupAudioVisualizer(state.localStream);
                     await populateDeviceList();
                 } catch (err) {
@@ -730,16 +751,21 @@
             }
 
             async function flipCamera() {
+                if (state.isScreenSharing) {
+                    stopScreenSharing();
+                }
                 state.useFacingMode = state.useFacingMode === 'user' ? 'environment' : 'user';
-                await initLocalCamera({
-                    video: { facingMode: { exact: state.useFacingMode } },
-                    audio: true
-                }).catch(async () => {
+                try {
+                    await initLocalCamera({
+                        video: { facingMode: { exact: state.useFacingMode } },
+                        audio: { echoCancellation: true, noiseSuppression: true }
+                    });
+                } catch (e) {
                     await initLocalCamera({
                         video: { facingMode: state.useFacingMode },
-                        audio: true
+                        audio: { echoCancellation: true, noiseSuppression: true }
                     });
-                });
+                }
                 updatePeerTracks();
                 showToast(`Switched to ${state.useFacingMode === 'user' ? 'front' : 'rear'} camera`);
             }
@@ -758,9 +784,12 @@
                         state.audioContext = null;
                     }
                     const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                    if (!AudioCtx || !stream.getAudioTracks().length) return;
+                    if (!AudioCtx || !stream || !stream.getAudioTracks().length) return;
 
                     state.audioContext = new AudioCtx();
+                    if (state.audioContext.state === 'suspended') {
+                        state.audioContext.resume().catch(() => {});
+                    }
                     const source = state.audioContext.createMediaStreamSource(stream);
                     state.analyser = state.audioContext.createAnalyser();
                     state.analyser.fftSize = 256;
@@ -788,6 +817,8 @@
 
             async function populateDeviceList() {
                 try {
+                    const currentVideoId = state.localStream?.getVideoTracks()[0]?.getSettings()?.deviceId;
+                    const currentAudioId = state.localStream?.getAudioTracks()[0]?.getSettings()?.deviceId;
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     els.videoSourceSelect.innerHTML = '';
                     els.audioSourceSelect.innerHTML = '';
@@ -795,39 +826,74 @@
                         const opt = document.createElement('option');
                         opt.value = device.deviceId;
                         opt.textContent = device.label || `${device.kind} (${device.deviceId.substring(0, 5)})`;
-                        if (device.kind === 'videoinput') els.videoSourceSelect.appendChild(opt);
-                        else if (device.kind === 'audioinput') els.audioSourceSelect.appendChild(opt);
+                        if (device.kind === 'videoinput') {
+                            if (device.deviceId === currentVideoId) opt.selected = true;
+                            els.videoSourceSelect.appendChild(opt);
+                        } else if (device.kind === 'audioinput') {
+                            if (device.deviceId === currentAudioId) opt.selected = true;
+                            els.audioSourceSelect.appendChild(opt);
+                        }
                     });
                 } catch (e) {}
             }
 
             els.videoSourceSelect.addEventListener('change', async () => {
-                const deviceId = els.videoSourceSelect.value;
-                await initLocalCamera({ video: { deviceId: { exact: deviceId } }, audio: true });
+                const videoId = els.videoSourceSelect.value;
+                const audioId = els.audioSourceSelect.value;
+                if (state.isScreenSharing) stopScreenSharing();
+                await initLocalCamera({
+                    video: videoId ? { deviceId: { exact: videoId } } : true,
+                    audio: audioId ? { deviceId: { exact: audioId } } : true
+                });
                 updatePeerTracks();
             });
 
             els.audioSourceSelect.addEventListener('change', async () => {
-                const deviceId = els.audioSourceSelect.value;
-                await initLocalCamera({ video: true, audio: { deviceId: { exact: deviceId } } });
-                updatePeerTracks();
+                const videoId = els.videoSourceSelect.value;
+                const audioId = els.audioSourceSelect.value;
+                await initLocalCamera({
+                    video: videoId ? { deviceId: { exact: videoId } } : true,
+                    audio: audioId ? { deviceId: { exact: audioId } } : true
+                });
+                updatePeerTracks(true);
             });
 
-            function updatePeerTracks() {
+            function updatePeerTracks(preserveScreenVideo = false) {
                 if (!state.localStream) return;
-                const videoTrack = state.localStream.getVideoTracks()[0];
+                const videoTrack = (preserveScreenVideo && state.isScreenSharing && state.screenStream)
+                    ? state.screenStream.getVideoTracks()[0]
+                    : state.localStream.getVideoTracks()[0];
                 const audioTrack = state.localStream.getAudioTracks()[0];
+
                 state.peers.forEach(peer => {
                     const senders = peer.pc.getSenders();
                     if (videoTrack) {
                         const vs = senders.find(s => s.track && s.track.kind === 'video');
-                        if (vs) vs.replaceTrack(videoTrack);
-                        else peer.pc.addTrack(videoTrack, state.localStream);
+                        if (vs) {
+                            vs.replaceTrack(videoTrack).catch(() => {});
+                        } else {
+                            const transceiver = peer.pc.getTransceivers().find(t => t.receiver.track?.kind === 'video');
+                            if (transceiver) {
+                                transceiver.direction = 'sendrecv';
+                                transceiver.sender.replaceTrack(videoTrack).catch(() => {});
+                            } else {
+                                peer.pc.addTrack(videoTrack, state.localStream);
+                            }
+                        }
                     }
                     if (audioTrack) {
                         const as = senders.find(s => s.track && s.track.kind === 'audio');
-                        if (as) as.replaceTrack(audioTrack);
-                        else peer.pc.addTrack(audioTrack, state.localStream);
+                        if (as) {
+                            as.replaceTrack(audioTrack).catch(() => {});
+                        } else {
+                            const transceiver = peer.pc.getTransceivers().find(t => t.receiver.track?.kind === 'audio');
+                            if (transceiver) {
+                                transceiver.direction = 'sendrecv';
+                                transceiver.sender.replaceTrack(audioTrack).catch(() => {});
+                            } else {
+                                peer.pc.addTrack(audioTrack, state.localStream);
+                            }
+                        }
                     }
                 });
             }
@@ -857,6 +923,9 @@
                 state.roomAuthHash = await sha256Hex(secretMaterial);
 
                 state.isHost = true;
+                state.isCoHost = false;
+                state.roomLocked = false;
+                els.toggleLockRoom.checked = false;
                 state.hostPeerId = state.localPeerId;
                 updateRoleUI();
 
@@ -875,6 +944,36 @@
                 startCallTimer();
                 state.statsInterval = setInterval(updateTelemetry, 2000);
 
+                if (state.healthCheckInterval) clearInterval(state.healthCheckInterval);
+                state.healthCheckInterval = setInterval(() => {
+                    if (!state.roomId) return;
+                    const now = Date.now();
+                    state.peers.forEach((peer, peerId) => {
+                        const isConnected = ['connected', 'completed'].includes(peer.pc.iceConnectionState);
+                        if (!isConnected && (now - peer.lastSeen > 3500) && state.localPeerId > peerId) {
+                            peer.lastSeen = now;
+                            try {
+                                peer.pc.restartIce();
+                                sendOfferToPeer(peer);
+                            } catch (e) {}
+                        }
+                    });
+                }, 3500);
+
+                document.addEventListener('visibilitychange', () => {
+                    if (!document.hidden && state.roomId) {
+                        announcePresence();
+                        state.peers.forEach((peer, peerId) => {
+                            if (!['connected', 'completed'].includes(peer.pc.iceConnectionState) && state.localPeerId > peerId) {
+                                try {
+                                    peer.pc.restartIce();
+                                    sendOfferToPeer(peer);
+                                } catch (e) {}
+                            }
+                        });
+                    }
+                });
+
                 broadcastSignal({
                     type: 'join-room',
                     name: state.displayName,
@@ -890,14 +989,58 @@
                 els.lobbyErrorText.textContent = msg;
             }
 
-            function abortJoinToLobby(reason) {
-                if (state.localStream) state.localStream.getTracks().forEach(t => t.stop());
-                if (state.bc) { state.bc.close(); state.bc = null; }
-                if (state.mqttReconnectTimer) clearTimeout(state.mqttReconnectTimer);
-                if (state.mqttWs) { state.mqttWs.close(); state.mqttWs = null; }
-                if (state.presenceInterval) clearInterval(state.presenceInterval);
-                if (state.callTimerInterval) clearInterval(state.callTimerInterval);
-                if (state.statsInterval) clearInterval(state.statsInterval);
+            function cleanupSessionResources() {
+                if (state.localStream) {
+                    state.localStream.getTracks().forEach(t => t.stop());
+                    state.localStream = null;
+                }
+                if (state.screenStream) {
+                    state.screenStream.getTracks().forEach(t => t.stop());
+                    state.screenStream = null;
+                }
+                state.isScreenSharing = false;
+                if (state.audioRafId) {
+                    cancelAnimationFrame(state.audioRafId);
+                    state.audioRafId = null;
+                }
+                if (state.audioContext) {
+                    state.audioContext.close().catch(() => {});
+                    state.audioContext = null;
+                }
+                if (state.bc) {
+                    state.bc.close();
+                    state.bc = null;
+                }
+                if (state.mqttReconnectTimer) {
+                    clearTimeout(state.mqttReconnectTimer);
+                    state.mqttReconnectTimer = null;
+                }
+                if (state.mqttPingInterval) {
+                    clearInterval(state.mqttPingInterval);
+                    state.mqttPingInterval = null;
+                }
+                if (state.mqttWs) {
+                    const ws = state.mqttWs;
+                    state.mqttWs = null;
+                    ws.close();
+                }
+                state.mqttConnected = false;
+                if (state.presenceInterval) {
+                    clearInterval(state.presenceInterval);
+                    state.presenceInterval = null;
+                }
+                if (state.callTimerInterval) {
+                    clearInterval(state.callTimerInterval);
+                    state.callTimerInterval = null;
+                }
+                if (state.statsInterval) {
+                    clearInterval(state.statsInterval);
+                    state.statsInterval = null;
+                }
+                if (state.healthCheckInterval) {
+                    clearInterval(state.healthCheckInterval);
+                    state.healthCheckInterval = null;
+                }
                 state.peers.forEach(p => {
                     if (p.retryTimer) clearTimeout(p.retryTimer);
                     p.pc.close();
@@ -905,6 +1048,11 @@
                 });
                 state.peers.clear();
                 state.roomId = '';
+                updateParticipantList();
+            }
+
+            function abortJoinToLobby(reason) {
+                cleanupSessionResources();
                 els.lobbyModal.classList.remove('hidden');
                 showLobbyError(reason);
             }
@@ -938,8 +1086,20 @@
                     updateSignalStatus('Local BC', true);
                 }
                 state.presenceInterval = setInterval(() => {
-                    if (state.roomId) announcePresence();
+                    if (!state.roomId) return;
+                    announcePresence();
+                    pruneStalePeers();
                 }, 3000);
+            }
+
+            function pruneStalePeers() {
+                const now = Date.now();
+                for (const [peerId, peer] of Array.from(state.peers.entries())) {
+                    const isIceHealthy = ['connected', 'completed'].includes(peer.pc.iceConnectionState);
+                    if (!isIceHealthy && now - peer.lastSeen > PEER_STALE_MS) {
+                        removePeer(peerId);
+                    }
+                }
             }
 
             function announcePresence() {
@@ -951,23 +1111,38 @@
                     authHash: state.roomAuthHash,
                     isHost: state.isHost,
                     isCoHost: state.isCoHost,
-                    hostPeerId: state.hostPeerId
+                    hostPeerId: state.hostPeerId,
+                    roomLocked: state.roomLocked,
+                    camEnabled: state.camEnabled
                 });
             }
 
             function broadcastSignal(payload) {
                 if (!state.roomId) return;
-                const msg = { ...payload, from: state.localPeerId, room: state.roomId };
+                const msg = { ...payload, from: state.localPeerId, room: state.roomId, sentAt: Date.now() };
                 if (state.bc) state.bc.postMessage(msg);
                 if (state.mqttConnected && state.mqttWs && state.mqttWs.readyState === WebSocket.OPEN) {
                     sendMqttMessage(msg);
                 }
             }
 
+            function concatUint8Arrays(a, b) {
+                const res = new Uint8Array(a.length + b.length);
+                res.set(a, 0);
+                res.set(b, a.length);
+                return res;
+            }
+
             function connectMqttRelay() {
                 if (!state.roomId) return;
+                if (state.mqttWs) {
+                    const oldWs = state.mqttWs;
+                    state.mqttWs = null;
+                    oldWs.close();
+                }
                 const brokerUrl = MQTT_BROKERS[state.mqttBrokerIndex % MQTT_BROKERS.length];
                 updateSignalStatus('Connecting...', false);
+                state.mqttRxBuffer = new Uint8Array(0);
 
                 try {
                     const ws = new WebSocket(brokerUrl, ['mqtt']);
@@ -975,41 +1150,83 @@
                     state.mqttWs = ws;
 
                     ws.onopen = () => {
+                        if (state.mqttWs !== ws) return;
                         const clientId = 'nexus_' + Math.random().toString(16).substring(2, 10);
                         ws.send(buildMqttConnectPacket(clientId));
                     };
 
                     ws.onmessage = (event) => {
-                        const data = new Uint8Array(event.data);
-                        const packetType = data[0] >> 4;
-                        if (packetType === 2) {
-                            state.mqttConnected = true;
-                            updateSignalStatus('Relay Online', true);
-                            ws.send(buildMqttSubscribePacket(1, `nexusrtc/v1/${state.topicHash}`));
-                            broadcastSignal({
-                                type: 'join-room',
-                                name: state.displayName,
-                                timestamp: state.joinTimestamp,
-                                authHash: state.roomAuthHash
-                            });
-                        } else if (packetType === 3) {
-                            parseMqttPublish(data, (jsonStr) => {
-                                try {
-                                    const msg = JSON.parse(jsonStr);
-                                    if (msg.from !== state.localPeerId && msg.room === state.roomId) {
-                                        handleSignalingMessage(msg);
+                        if (state.mqttWs !== ws) return;
+                        const incoming = new Uint8Array(event.data);
+                        state.mqttRxBuffer = concatUint8Arrays(state.mqttRxBuffer, incoming);
+
+                        while (state.mqttRxBuffer.length >= 2) {
+                            let idx = 1;
+                            let multiplier = 1;
+                            let remLen = 0;
+                            let byte = 0;
+                            let completeHeader = false;
+
+                            while (idx < state.mqttRxBuffer.length) {
+                                byte = state.mqttRxBuffer[idx++];
+                                remLen += (byte & 127) * multiplier;
+                                multiplier *= 128;
+                                if ((byte & 128) === 0) {
+                                    completeHeader = true;
+                                    break;
+                                }
+                            }
+
+                            if (!completeHeader || state.mqttRxBuffer.length < idx + remLen) {
+                                break;
+                            }
+
+                            const packet = state.mqttRxBuffer.slice(0, idx + remLen);
+                            state.mqttRxBuffer = state.mqttRxBuffer.slice(idx + remLen);
+
+                            const packetType = packet[0] >> 4;
+                            if (packetType === 2) {
+                                state.mqttConnected = true;
+                                updateSignalStatus('Relay Online', true);
+                                ws.send(buildMqttSubscribePacket(1, `nexusrtc/v1/${state.topicHash}`));
+
+                                if (state.mqttPingInterval) clearInterval(state.mqttPingInterval);
+                                state.mqttPingInterval = setInterval(() => {
+                                    if (state.mqttWs === ws && ws.readyState === WebSocket.OPEN) {
+                                        ws.send(new Uint8Array([0xc0, 0x00]).buffer);
                                     }
-                                } catch (e) {}
-                            });
+                                }, 25000);
+
+                                broadcastSignal({
+                                    type: 'join-room',
+                                    name: state.displayName,
+                                    timestamp: state.joinTimestamp,
+                                    authHash: state.roomAuthHash
+                                });
+                            } else if (packetType === 3) {
+                                parseMqttPublish(packet, (jsonStr) => {
+                                    try {
+                                        const msg = JSON.parse(jsonStr);
+                                        if (msg.from !== state.localPeerId && msg.room === state.roomId) {
+                                            handleSignalingMessage(msg);
+                                        }
+                                    } catch (e) {}
+                                });
+                            }
                         }
                     };
 
                     ws.onerror = () => {
-                        ws.close();
+                        if (state.mqttWs === ws) ws.close();
                     };
 
                     ws.onclose = () => {
+                        if (state.mqttWs !== ws) return;
                         state.mqttConnected = false;
+                        if (state.mqttPingInterval) {
+                            clearInterval(state.mqttPingInterval);
+                            state.mqttPingInterval = null;
+                        }
                         updateSignalStatus(state.bc ? 'Local Only' : 'Reconnecting...', !!state.bc);
                         if (state.roomId) {
                             state.mqttBrokerIndex++;
@@ -1061,6 +1278,8 @@
             }
 
             function parseMqttPublish(data, callback) {
+                const flags = data[0] & 0x0f;
+                const qos = (flags >> 1) & 0x03;
                 let i = 1, multiplier = 1, remLen = 0, byte = 0;
                 do {
                     if (i >= data.length) return;
@@ -1072,6 +1291,7 @@
                 if (i + 2 > data.length) return;
                 const tLen = (data[i] << 8) + data[i + 1];
                 i += 2 + tLen;
+                if (qos > 0) i += 2;
                 if (i > packetEnd || packetEnd > data.length) return;
                 callback(new TextDecoder().decode(data.slice(i, packetEnd)));
             }
@@ -1094,13 +1314,15 @@
             }
 
             async function sendOfferToPeer(peerEntry) {
-                if (!peerEntry || peerEntry.pc.signalingState !== 'stable') return;
+                if (!peerEntry || peerEntry.makingOffer || peerEntry.pc.signalingState !== 'stable') return;
                 try {
+                    peerEntry.makingOffer = true;
                     if (!peerEntry.dc) {
                         const dc = peerEntry.pc.createDataChannel('nexus_chat');
                         setupDataChannel(peerEntry, dc);
                     }
                     const offer = await peerEntry.pc.createOffer();
+                    if (peerEntry.pc.signalingState !== 'stable') return;
                     await peerEntry.pc.setLocalDescription(offer);
                     broadcastSignal({
                         type: 'offer',
@@ -1110,10 +1332,23 @@
                         timestamp: state.joinTimestamp,
                         authHash: state.roomAuthHash,
                         isHost: state.isHost,
-                        isCoHost: state.isCoHost
+                        isCoHost: state.isCoHost,
+                        camEnabled: state.camEnabled
                     });
                 } catch (err) {
                     console.warn('Offer creation error:', err);
+                } finally {
+                    peerEntry.makingOffer = false;
+                }
+            }
+
+            function updatePeerVideoState(peer, camEnabled) {
+                if (!peer) return;
+                peer.camEnabled = camEnabled;
+                const connected = ['connected', 'completed'].includes(peer.pc.iceConnectionState);
+                if (connected) {
+                    peer.statusSpanEl.textContent = camEnabled ? '' : 'Camera Off';
+                    peer.placeholderEl.classList.toggle('hidden', camEnabled && peer.remoteStream.getVideoTracks().length > 0);
                 }
             }
 
@@ -1126,7 +1361,12 @@
                     return;
                 }
 
-                if (state.roomLocked && (msg.type === 'presence-announce' || msg.type === 'join-room')) {
+                const existingPeer = state.peers.get(msg.from);
+                if (existingPeer) {
+                    existingPeer.lastSeen = Date.now();
+                }
+
+                if (state.roomLocked && !existingPeer && (msg.type === 'presence-announce' || msg.type === 'join-room')) {
                     if (state.isHost) {
                         broadcastSignal({ type: 'reject_join', target: msg.from, reason: 'Room is locked by Host' });
                     }
@@ -1152,6 +1392,8 @@
                         hostTimestamp: state.hostTimestamp,
                         isHost: state.isHost,
                         isCoHost: state.isCoHost,
+                        roomLocked: state.roomLocked,
+                        camEnabled: state.camEnabled,
                         name: state.displayName,
                         timestamp: state.joinTimestamp,
                         authHash: state.roomAuthHash
@@ -1163,50 +1405,78 @@
                     }
                 } else if (msg.type === 'room-state' || msg.type === 'presence-announce') {
                     adoptAuthoritativeHost(msg.hostPeerId, msg.hostTimestamp);
+                    if (typeof msg.roomLocked === 'boolean' && msg.from === state.hostPeerId) {
+                        state.roomLocked = msg.roomLocked;
+                        els.toggleLockRoom.checked = msg.roomLocked;
+                    }
 
                     const peer = getOrCreatePeer(peerId, msg.name || 'Peer', shouldOffer, msg.isHost, msg.isCoHost, msg.timestamp);
                     if (msg.name) {
                         peer.name = msg.name;
                         peer.nametagSpan.textContent = msg.name;
+                        peer.avatarEl.textContent = getInitials(msg.name);
                     }
                     peer.isHost = !!msg.isHost;
                     peer.isCoHost = !!msg.isCoHost;
                     if (msg.timestamp) peer.joinTimestamp = msg.timestamp;
+                    if (typeof msg.camEnabled === 'boolean') {
+                        updatePeerVideoState(peer, msg.camEnabled);
+                    }
                     updateParticipantList();
 
-                    if (shouldOffer && ['new', 'disconnected', 'checking'].includes(peer.pc.iceConnectionState)) {
+                    if (shouldOffer && ['new', 'disconnected'].includes(peer.pc.iceConnectionState)) {
                         await sendOfferToPeer(peer);
+                    }
+                } else if (msg.type === 'cam-state') {
+                    if (existingPeer && typeof msg.camEnabled === 'boolean') {
+                        updatePeerVideoState(existingPeer, msg.camEnabled);
                     }
                 } else if (msg.type === 'offer') {
                     const peer = getOrCreatePeer(peerId, msg.name || 'Peer', false, msg.isHost, msg.isCoHost, msg.timestamp);
-                    if (peer.pc.signalingState !== 'stable') {
-                        await Promise.all([
-                            peer.pc.setLocalDescription({ type: 'rollback' }),
-                            peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-                        ]).catch(() => {});
-                    } else {
-                        await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                    const polite = state.localPeerId < peerId;
+                    const offerCollision = peer.makingOffer || peer.pc.signalingState !== 'stable';
+                    peer.ignoreOffer = !polite && offerCollision;
+                    if (peer.ignoreOffer) return;
+
+                    try {
+                        if (offerCollision) {
+                            await Promise.all([
+                                peer.pc.setLocalDescription({ type: 'rollback' }),
+                                peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+                            ]);
+                        } else {
+                            await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                        }
+                        peer.remoteDescSet = true;
+                        await flushIceQueue(peer);
+                        const answer = await peer.pc.createAnswer();
+                        await peer.pc.setLocalDescription(answer);
+                        broadcastSignal({
+                            type: 'answer',
+                            target: peerId,
+                            sdp: peer.pc.localDescription,
+                            camEnabled: state.camEnabled,
+                            authHash: state.roomAuthHash
+                        });
+                        if (typeof msg.camEnabled === 'boolean') {
+                            updatePeerVideoState(peer, msg.camEnabled);
+                        }
+                    } catch (err) {
+                        console.warn('Offer handling error:', err);
                     }
-                    peer.remoteDescSet = true;
-                    await flushIceQueue(peer);
-                    const answer = await peer.pc.createAnswer();
-                    await peer.pc.setLocalDescription(answer);
-                    broadcastSignal({
-                        type: 'answer',
-                        target: peerId,
-                        sdp: peer.pc.localDescription,
-                        authHash: state.roomAuthHash
-                    });
                 } else if (msg.type === 'answer') {
                     const peer = state.peers.get(peerId);
                     if (peer && peer.pc.signalingState === 'have-local-offer') {
-                        await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                        await peer.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(() => {});
                         peer.remoteDescSet = true;
                         await flushIceQueue(peer);
+                        if (typeof msg.camEnabled === 'boolean') {
+                            updatePeerVideoState(peer, msg.camEnabled);
+                        }
                     }
                 } else if (msg.type === 'ice') {
                     const peer = state.peers.get(peerId);
-                    if (peer && msg.candidate) {
+                    if (peer && msg.candidate && !peer.ignoreOffer) {
                         if (peer.remoteDescSet) {
                             await peer.pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
                         } else {
@@ -1226,13 +1496,17 @@
                         state.micEnabled = false;
                         if (state.localStream) state.localStream.getAudioTracks().forEach(t => t.enabled = false);
                         els.btnMic.className = 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white';
+                        setButtonIcon(els.btnMic, 'mic-off');
                         els.localMicIndicator.className = 'w-2 h-2 rounded-full bg-red-500';
                         showToast('Host muted all participants.');
                     }
                 } else if (msg.type === 'set_role') {
                     state.isHost = msg.role === 'host';
                     state.isCoHost = msg.role === 'co-host';
-                    if (state.isHost) state.hostPeerId = state.localPeerId;
+                    if (state.isHost) {
+                        state.hostPeerId = state.localPeerId;
+                        state.hostTimestamp = state.joinTimestamp;
+                    }
                     updateRoleUI();
                     showToast(`You are now assigned as ${msg.role.toUpperCase()}`);
                 }
@@ -1295,23 +1569,38 @@
                     tileEl: tile,
                     videoEl: video,
                     placeholderEl: placeholder,
+                    avatarEl: avatar,
                     statusSpanEl: statusSpan,
                     nametagSpan,
                     isHost: !!isHost,
                     isCoHost: !!isCoHost,
+                    camEnabled: true,
                     joinTimestamp,
+                    lastSeen: Date.now(),
                     iceQueue: [],
                     remoteDescSet: false,
+                    makingOffer: false,
+                    ignoreOffer: false,
                     fileBuffers: new Map(),
                     retryTimer: null
                 };
                 state.peers.set(peerId, peerEntry);
                 updateParticipantList();
 
-                if (state.localStream && state.localStream.getTracks().length > 0) {
-                    state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
+                const activeVideoTrack = (state.isScreenSharing && state.screenStream)
+                    ? state.screenStream.getVideoTracks()[0]
+                    : state.localStream?.getVideoTracks()[0];
+                const activeAudioTrack = state.localStream?.getAudioTracks()[0];
+
+                if (activeVideoTrack) {
+                    pc.addTrack(activeVideoTrack, state.isScreenSharing ? state.screenStream : state.localStream);
                 } else {
                     pc.addTransceiver('video', { direction: 'recvonly' });
+                }
+
+                if (activeAudioTrack) {
+                    pc.addTrack(activeAudioTrack, state.localStream);
+                } else {
                     pc.addTransceiver('audio', { direction: 'recvonly' });
                 }
 
@@ -1321,11 +1610,9 @@
                     }
                 };
 
-                // FIX: Force ICE restart / fallback gathering if stuck in 'new'
                 pc.onicegatheringstatechange = () => {
-                    if (pc.iceGatheringState === 'complete' && pc.iceConnectionState === 'new') {
-                        statusSpan.textContent = 'Gathering STUN/TURN...';
-                        if (shouldOffer) pc.restartIce();
+                    if (pc.iceGatheringState === 'gathering' && pc.iceConnectionState === 'new') {
+                        statusSpan.textContent = 'Gathering Candidates...';
                     }
                 };
 
@@ -1336,23 +1623,25 @@
                                 remoteStream.addTrack(t);
                             }
                         });
-                    } else if (e.track) {
+                    } else if (e.track && !remoteStream.getTracks().some(rt => rt.id === e.track.id)) {
                         remoteStream.addTrack(e.track);
                     }
-                    placeholder.classList.add('hidden');
+                    video.play().catch(() => {});
+                    if (peerEntry.camEnabled && remoteStream.getVideoTracks().length > 0) {
+                        placeholder.classList.add('hidden');
+                    }
                 };
 
                 pc.oniceconnectionstatechange = () => {
                     const iceState = pc.iceConnectionState;
                     if (iceState === 'connected' || iceState === 'completed') {
-                        statusSpan.textContent = 'Connected';
-                        if (remoteStream.getVideoTracks().length > 0) {
-                            placeholder.classList.add('hidden');
-                        }
+                        peerEntry.lastSeen = Date.now();
+                        updatePeerVideoState(peerEntry, peerEntry.camEnabled);
                     } else if (iceState === 'checking') {
                         statusSpan.textContent = 'Negotiating NAT...';
                     } else if (iceState === 'failed') {
                         statusSpan.textContent = 'ICE Failed — Retrying...';
+                        placeholder.classList.remove('hidden');
                         if (shouldOffer) {
                             pc.restartIce();
                             sendOfferToPeer(peerEntry);
@@ -1415,6 +1704,7 @@
                         if (newHostId === state.localPeerId) {
                             state.isHost = true;
                             showToast('You are now the Room Host!');
+                            announcePresence();
                         }
                         updateRoleUI();
                     }
@@ -1476,6 +1766,7 @@
 
             els.toggleLockRoom.addEventListener('change', (e) => {
                 state.roomLocked = e.target.checked;
+                announcePresence();
                 showToast(state.roomLocked ? 'Room locked. New joins blocked.' : 'Room unlocked.');
             });
 
@@ -1510,6 +1801,7 @@
                 els.btnMic.className = state.micEnabled
                     ? 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white'
                     : 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white';
+                setButtonIcon(els.btnMic, state.micEnabled ? 'mic' : 'mic-off');
                 els.localMicIndicator.className = state.micEnabled ? 'w-2 h-2 rounded-full bg-emerald-400' : 'w-2 h-2 rounded-full bg-red-500';
             });
 
@@ -1519,7 +1811,11 @@
                 els.btnCam.className = state.camEnabled
                     ? 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gray-800/90 hover:bg-gray-700 flex items-center justify-center transition-all text-white'
                     : 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all text-white';
-                els.localPlaceholder.classList.toggle('hidden', state.camEnabled);
+                setButtonIcon(els.btnCam, state.camEnabled ? 'video' : 'video-off');
+                if (!state.isScreenSharing) {
+                    els.localPlaceholder.classList.toggle('hidden', state.camEnabled);
+                }
+                broadcastSignal({ type: 'cam-state', camEnabled: state.camEnabled || state.isScreenSharing, authHash: state.roomAuthHash });
             });
 
             els.btnScreen.addEventListener('click', async () => {
@@ -1529,13 +1825,14 @@
                         const track = state.screenStream.getVideoTracks()[0];
                         state.peers.forEach(peer => {
                             const sender = peer.pc.getSenders().find(s => s.track && s.track.kind === 'video');
-                            if (sender) sender.replaceTrack(track);
+                            if (sender) sender.replaceTrack(track).catch(() => {});
                         });
                         els.localVideo.srcObject = state.screenStream;
                         els.localPlaceholder.classList.add('hidden');
                         state.isScreenSharing = true;
                         updateLocalVideoMirror();
                         els.btnScreen.classList.add('bg-primary');
+                        broadcastSignal({ type: 'cam-state', camEnabled: true, authHash: state.roomAuthHash });
                         track.onended = () => stopScreenSharing();
                     } catch (e) {
                         showToast('Could not start screen sharing', 'error');
@@ -1554,7 +1851,7 @@
                     const track = state.localStream.getVideoTracks()[0];
                     state.peers.forEach(peer => {
                         const sender = peer.pc.getSenders().find(s => s.track && s.track.kind === 'video');
-                        if (sender && track) sender.replaceTrack(track);
+                        if (sender && track) sender.replaceTrack(track).catch(() => {});
                     });
                     els.localVideo.srcObject = state.localStream;
                     els.localPlaceholder.classList.toggle('hidden', state.camEnabled);
@@ -1562,6 +1859,7 @@
                 state.isScreenSharing = false;
                 updateLocalVideoMirror();
                 els.btnScreen.classList.remove('bg-primary');
+                broadcastSignal({ type: 'cam-state', camEnabled: state.camEnabled, authHash: state.roomAuthHash });
             }
 
             els.btnHand.addEventListener('click', () => {
@@ -1578,8 +1876,14 @@
 
             document.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    const filter = e.target.getAttribute('data-filter');
+                    const filter = e.currentTarget.getAttribute('data-filter');
+                    state.activeFilter = filter;
                     els.localVideo.style.filter = filter === 'none' ? '' : filter;
+                    document.querySelectorAll('.filter-btn').forEach(b => {
+                        b.className = b === e.currentTarget
+                            ? 'filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-primary text-white'
+                            : 'filter-btn px-2.5 py-1 rounded-xl text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300';
+                    });
                     els.filterPickerBox.classList.add('hidden');
                 });
             });
@@ -1591,7 +1895,7 @@
 
             document.querySelectorAll('.reaction-emoji').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    const emoji = e.target.getAttribute('data-emoji');
+                    const emoji = e.currentTarget.getAttribute('data-emoji');
                     spawnFloatingEmoji(emoji);
                     broadcastDataMessage({ type: 'reaction', emoji });
                     els.reactionPicker.classList.add('hidden');
@@ -1600,7 +1904,7 @@
 
             function spawnFloatingEmoji(emoji) {
                 const el = document.createElement('div');
-                el.className = 'absolute bottom-16 left-1/2 transform -translate-x-1/2 text-3xl animate-bounce pointer-events-none transition-all duration-1000';
+                el.className = 'absolute bottom-16 transform -translate-x-1/2 text-3xl animate-bounce pointer-events-none transition-all duration-1000';
                 el.style.left = `${Math.random() * 70 + 15}%`;
                 const span = document.createElement('span');
                 span.textContent = emoji;
@@ -1638,7 +1942,7 @@
                 els.chatTabContent.classList.add('hidden');
             });
 
-            // Chat & Chunked File form
+            // Chat & Chunked File form (with backpressure throttling)
             els.chatForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 const text = els.chatInput.value.trim();
@@ -1648,6 +1952,35 @@
                 broadcastDataMessage({ type: 'chat', text, time });
                 els.chatInput.value = '';
             });
+
+            async function sendFileChunked(file, fileData, time) {
+                const fileId = 'f_' + Math.random().toString(36).substring(2, 10);
+                const totalChunks = Math.ceil(fileData.length / FILE_CHUNK_SIZE);
+
+                for (let i = 0; i < totalChunks; i++) {
+                    let needsWait = false;
+                    state.peers.forEach(peer => {
+                        if (peer.dc && peer.dc.readyState === 'open' && peer.dc.bufferedAmount > 262144) {
+                            needsWait = true;
+                        }
+                    });
+                    if (needsWait) {
+                        await new Promise(r => setTimeout(r, 25));
+                    }
+
+                    const chunk = fileData.slice(i * FILE_CHUNK_SIZE, (i + 1) * FILE_CHUNK_SIZE);
+                    broadcastDataMessage({
+                        type: 'file-chunk',
+                        fileId,
+                        index: i,
+                        totalChunks,
+                        fileName: file.name,
+                        fileType: file.type,
+                        chunk,
+                        time
+                    });
+                }
+            }
 
             els.fileInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
@@ -1662,22 +1995,7 @@
                     const fileData = event.target.result;
                     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     appendFileMessage('You', file.name, fileData, file.type, true, time);
-
-                    const fileId = 'f_' + Math.random().toString(36).substring(2, 10);
-                    const totalChunks = Math.ceil(fileData.length / FILE_CHUNK_SIZE);
-                    for (let i = 0; i < totalChunks; i++) {
-                        const chunk = fileData.slice(i * FILE_CHUNK_SIZE, (i + 1) * FILE_CHUNK_SIZE);
-                        broadcastDataMessage({
-                            type: 'file-chunk',
-                            fileId,
-                            index: i,
-                            totalChunks,
-                            fileName: file.name,
-                            fileType: file.type,
-                            chunk,
-                            time
-                        });
-                    }
+                    sendFileChunked(file, fileData, time);
                 };
                 reader.readAsDataURL(file);
             });
@@ -1713,7 +2031,8 @@
                 els.chatMessages.appendChild(msg);
                 els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
 
-                if (!state.sidebarOpen && !isSelf) {
+                const isDesktop = window.innerWidth >= 768;
+                if (!isDesktop && !state.sidebarOpen && !isSelf) {
                     state.unreadCount++;
                     els.sidebarBadge.textContent = state.unreadCount;
                     els.sidebarBadge.classList.remove('hidden');
@@ -1755,7 +2074,8 @@
                 els.chatMessages.appendChild(msg);
                 els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
 
-                if (!state.sidebarOpen && !isSelf) {
+                const isDesktop = window.innerWidth >= 768;
+                if (!isDesktop && !state.sidebarOpen && !isSelf) {
                     state.unreadCount++;
                     els.sidebarBadge.textContent = state.unreadCount;
                     els.sidebarBadge.classList.remove('hidden');
@@ -1773,18 +2093,18 @@
                 selfRow.className = 'flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs';
 
                 const selfLeft = document.createElement('div');
-                selfLeft.className = 'flex items-center gap-2';
+                selfLeft.className = 'flex items-center gap-2 min-w-0';
                 const selfAvatar = document.createElement('div');
-                selfAvatar.className = 'w-7 h-7 rounded-full bg-primary/30 border border-primary/50 flex items-center justify-center font-bold text-primary';
+                selfAvatar.className = 'w-7 h-7 rounded-full bg-primary/30 border border-primary/50 flex items-center justify-center font-bold text-primary shrink-0';
                 selfAvatar.textContent = getInitials(state.displayName);
                 const selfName = document.createElement('span');
-                selfName.className = 'font-medium';
+                selfName.className = 'font-medium truncate';
                 selfName.textContent = `${state.displayName} (You)`;
                 selfLeft.appendChild(selfAvatar);
                 selfLeft.appendChild(selfName);
 
                 const selfBadge = document.createElement('span');
-                selfBadge.className = 'text-[10px] text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-500/10';
+                selfBadge.className = 'text-[10px] text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-500/10 shrink-0';
                 selfBadge.textContent = state.isHost ? 'Host' : state.isCoHost ? 'Co-Host' : 'You';
 
                 selfRow.appendChild(selfLeft);
@@ -1793,21 +2113,21 @@
 
                 state.peers.forEach((peer, peerId) => {
                     const item = document.createElement('div');
-                    item.className = 'flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs';
+                    item.className = 'flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs gap-2';
 
                     const left = document.createElement('div');
-                    left.className = 'flex items-center gap-2';
+                    left.className = 'flex items-center gap-2 min-w-0';
                     const avatar = document.createElement('div');
-                    avatar.className = 'w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center font-bold text-indigo-300';
+                    avatar.className = 'w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center font-bold text-indigo-300 shrink-0';
                     avatar.textContent = getInitials(peer.name);
                     const nameSpan = document.createElement('span');
-                    nameSpan.className = 'font-medium';
+                    nameSpan.className = 'font-medium truncate';
                     nameSpan.textContent = peer.name;
                     left.appendChild(avatar);
                     left.appendChild(nameSpan);
 
                     const right = document.createElement('div');
-                    right.className = 'flex items-center gap-2';
+                    right.className = 'flex items-center gap-1.5 shrink-0';
                     const roleTag = document.createElement('span');
                     roleTag.className = 'text-[10px] text-indigo-400 font-semibold px-2 py-0.5 rounded bg-indigo-500/10';
                     roleTag.textContent = peer.isHost ? 'Host' : peer.isCoHost ? 'Co-Host' : 'Peer';
@@ -1820,8 +2140,8 @@
                         const coHostBtn = document.createElement('button');
                         coHostBtn.type = 'button';
                         coHostBtn.className = 'px-2 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 text-[10px]';
-                        coHostBtn.textContent = 'Co-Host';
-                        coHostBtn.addEventListener('click', () => assignRole(peerId, 'co-host'));
+                        coHostBtn.textContent = peer.isCoHost ? 'Demote' : 'Co-Host';
+                        coHostBtn.addEventListener('click', () => assignRole(peerId, peer.isCoHost ? 'peer' : 'co-host'));
 
                         const kickBtn = document.createElement('button');
                         kickBtn.type = 'button';
@@ -1855,18 +2175,14 @@
                     peer.isCoHost = role === 'co-host';
                     updateParticipantList();
                 }
-                showToast(`Assigned ${role.toUpperCase()} to peer.`);
+                showToast(`Updated peer role to ${role.toUpperCase()}.`);
             }
 
             function leaveRoom() {
                 if (state.roomId) {
                     broadcastSignal({ type: 'bye', authHash: state.roomAuthHash });
                 }
-                if (state.localStream) state.localStream.getTracks().forEach(t => t.stop());
-                if (state.screenStream) state.screenStream.getTracks().forEach(t => t.stop());
-                if (state.bc) state.bc.close();
-                if (state.mqttWs) state.mqttWs.close();
-                state.peers.forEach(peer => peer.pc.close());
+                cleanupSessionResources();
                 window.location.reload();
             }
 
