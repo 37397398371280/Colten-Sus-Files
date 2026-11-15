@@ -60,6 +60,10 @@
 
         <div class="flex items-center gap-2 shrink-0">
             <span id="signalStatusBadge" class="text-[10px] px-2 py-1 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 font-mono hidden sm:inline-block">Signal: Offline</span>
+            <button type="button" id="copyInviteBtn" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-all flex items-center gap-1.5" title="Copy Room Link">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">Invite</span>
+            </button>
             <button type="button" id="hostSettingsHeaderBtn" class="hidden px-2.5 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-semibold transition-all flex items-center gap-1.5">
                 <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
                 <span class="hidden sm:inline">Host Panel</span>
@@ -445,6 +449,7 @@
                 roomBadge: $('roomBadge'),
                 roleBadge: $('roleBadge'),
                 signalStatusBadge: $('signalStatusBadge'),
+                copyInviteBtn: $('copyInviteBtn'),
                 hostSettingsHeaderBtn: $('hostSettingsHeaderBtn'),
                 headerLeaveRoomBtn: $('headerLeaveRoomBtn'),
                 callTimer: $('callTimer'),
@@ -618,6 +623,15 @@
                     ? 'text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono hidden sm:inline-block'
                     : 'text-[10px] px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono hidden sm:inline-block';
             }
+
+            els.copyInviteBtn.addEventListener('click', () => {
+                const inviteUrl = window.location.href;
+                navigator.clipboard.writeText(inviteUrl).then(() => {
+                    showToast('Room link copied to clipboard!');
+                }).catch(() => {
+                    prompt('Copy room link:', inviteUrl);
+                });
+            });
 
             // ---------------------------------------------------------
             // TELEMETRY DRAWER
@@ -930,25 +944,22 @@
                 startCallTimer();
                 state.statsInterval = setInterval(updateTelemetry, 2000);
 
-                // Start connection health checker & self-healing loop
                 if (state.healthCheckInterval) clearInterval(state.healthCheckInterval);
                 state.healthCheckInterval = setInterval(() => {
                     if (!state.roomId) return;
                     const now = Date.now();
                     state.peers.forEach((peer, peerId) => {
                         const isConnected = ['connected', 'completed'].includes(peer.pc.iceConnectionState);
-                        // If stuck in checking/new for over 4 seconds, force restart ice and re-offer
-                        if (!isConnected && (now - peer.lastSeen > 4000) && state.localPeerId > peerId) {
-                            peer.lastSeen = now; // throttle attempts
+                        if (!isConnected && (now - peer.lastSeen > 3500) && state.localPeerId > peerId) {
+                            peer.lastSeen = now;
                             try {
                                 peer.pc.restartIce();
                                 sendOfferToPeer(peer);
                             } catch (e) {}
                         }
                     });
-                }, 4000);
+                }, 3500);
 
-                // Handle mobile visibility restoration
                 document.addEventListener('visibilitychange', () => {
                     if (!document.hidden && state.roomId) {
                         announcePresence();
