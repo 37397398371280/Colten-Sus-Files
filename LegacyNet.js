@@ -1,17 +1,90 @@
 (function (root) {
   "use strict";
 
-  // Minimal ES3-compatible Promise/callback helper (no native Promise required)
-  function Deferred() {
+  // ES3-safe JSON helpers (uses native JSON when available, falls back cleanly)
+  function escapeString(str) {
+    return str
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t");
+  }
+
+  function es3Stringify(val) {
+    var type = typeof val;
+    var i;
+    var parts;
+    var key;
+
+    if (val === null || type === "boolean" || type === "number") {
+      return String(val);
+    }
+    if (type === "string") {
+      return '"' + escapeString(val) + '"';
+    }
+    if (val instanceof Array) {
+      parts = [];
+      for (i = 0; i < val.length; i++) {
+        parts.push(es3Stringify(val[i]));
+      }
+      return "[" + parts.join(",") + "]";
+    }
+    if (type === "object") {
+      parts = [];
+      for (key in val) {
+        if (val.hasOwnProperty(key) && typeof val[key] !== "function" && typeof val[key] !== "undefined") {
+          parts.push('"' + escapeString(key) + '":' + es3Stringify(val[key]));
+        }
+      }
+      return "{" + parts.join(",") + "}";
+    }
+    return "null";
+  }
+
+  function es3Parse(text) {
+    // Controlled evaluation for ES3 environments without native JSON.parse
+    if (typeof text !== "string") {
+      return text;
+    }
+    if (!/^[\],:{}\s]*$/.test(
+      text
+        .replace(/\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g, "@")
+        .replace(/"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g, "]")
+        .replace(/(?:^|:|,)(?:\s*\[)+/g, "")
+    )) {
+      throw new SyntaxError("Invalid JSON string");
+    }
+    return (new Function("return (" + text + ")"))();
+  }
+
+  function safeStringify(val) {
+    if (typeof JSON !== "undefined" && typeof JSON.stringify === "function") {
+      return JSON.stringify(val);
+    }
+    return es3Stringify(val);
+  }
+
+  function safeParse(text) {
+    if (typeof JSON !== "undefined" && typeof JSON.parse === "function") {
+      return JSON.parse(text);
+    }
+    return es3Parse(text);
+  }
+
+  // Minimal ES3-compatible Promise/callback helper with abort support
+  function Deferred(onAbort) {
     this._done = [];
     this._fail = [];
     this._state = "pending";
     this._value = undefined;
+    this._aborted = false;
+    this._onAbort = onAbort || null;
   }
 
   Deferred.prototype.resolve = function (val) {
     var i;
-    if (this._state !== "pending") {
+    if (this._state !== "pending" || this._aborted) {
       return;
     }
     this._state = "fulfilled";
@@ -23,7 +96,7 @@
 
   Deferred.prototype.reject = function (err) {
     var i;
-    if (this._state !== "pending") {
+    if (this._state !== "pending" || this._aborted) {
       return;
     }
     this._state = "rejected";
@@ -33,9 +106,28 @@
     }
   };
 
+  Deferred.prototype.abort = function (reason) {
+    var err;
+    if (this._state !== "pending" || this._aborted) {
+      return;
+    }
+    this._aborted = true;
+    if (typeof this._onAbort === "function") {
+      try {
+        this._onAbort(reason);
+      } catch (e) {}
+    }
+    err = new Error(reason || "Request aborted");
+    err.code = "ABORTED";
+    this._state = "rejected";
+    this._value = err;
+    for (var i = 0; i < this._fail.length; i++) {
+      this._fail[i](err);
+    }
+  };
+
   Deferred.prototype.then = function (onFulfilled, onRejected) {
     var next = new Deferred();
-    var self = this;
 
     function handleFulfilled(val) {
       var res;
@@ -77,7 +169,7 @@
     return next;
   };
 
-  // Create an HTTP transport using XHR or IE ActiveX fallback
+  // HTTP transport factory: XHR or IE ActiveX fallback
   function createXHR() {
     var progIds = ["Msxml2.XMLHTTP.6.0", "Msxml2.XMLHTTP.3.0", "Microsoft.XMLHTTP"];
     var i;
@@ -116,112 +208,266 @@
     return url + (url.indexOf("?") === -1 ? "?" : "&") + qs;
   }
 
-  // Main library namespace
+  function isRetryableError(err) {
+    if (!err) {
+      return false;
+    }
+    if (err.code === "ABORTED") {
+      return false;
+    }
+    if (err.timeout === true) {
+      return true;
+    }
+    if (typeof err.status === "number") {
+      return err.status === 408 || err.status === 429 || (err.status >= 500 && err.status < 600);
+    }
+    return true;
+  }
+
   var LegacyNet = {
-    version: "1.0.0-es3",
+    version: "1.1.0-es3",
+    json: {
+      stringify: safeStringify,
+      parse: safeParse
+    },
     capabilities: {
       fetch: typeof root.fetch === "function",
       xhr: createXHR() !== null,
       webSocket: typeof root.WebSocket === "function",
-      rtcPeerConnection: typeof root.RTCPeerConnection === "function"
+      rtcPeerConnection: typeof root.RTCPeerConnection === "function",
+      abortController: typeof root.AbortController === "function"
+    },
+    // Explicit runtime & security boundaries enforced by the host environment
+    limits: {
+      missingProtocols:
+        "ES3 JavaScript cannot create UDP sockets, run ICE/STUN/TURN negotiation, or perform DTLS/SRTP encryption for WebRTC on a runtime that lacks native WebRTC support.",
+      securityEnforcedByHost:
+        "Even with a fallback transport, Same-Origin Policy, CORS, and TLS requirements are enforced by the host environment, not bypassed by the library."
     },
 
-    // Unified HTTP request: prefers fetch, falls back to XHR/ActiveX
+    // Unified HTTP request with timeout, retries, abort, and ES3 JSON support
     request: function (opts, callback) {
-      var d = new Deferred();
       var method = (opts.method || "GET").toUpperCase();
       var url = appendQuery(opts.url, opts.params);
-      var headers = opts.headers || {};
-      var body = opts.body;
-      var xhr;
-      var headerKey;
+      var maxRetries = typeof opts.retries === "number" && opts.retries >= 0 ? opts.retries : 0;
+      var retryDelay = typeof opts.retryDelay === "number" && opts.retryDelay >= 0 ? opts.retryDelay : 250;
+      var timeoutMs = typeof opts.timeout === "number" && opts.timeout > 0 ? opts.timeout : 0;
+      var attempt = 0;
+      var activeCleanup = null;
+      var timerId = null;
+      var retryTimerId = null;
 
-      function finishOk(payload) {
+      var d = new Deferred(function () {
+        if (timerId !== null && typeof root.clearTimeout === "function") {
+          root.clearTimeout(timerId);
+        }
+        if (retryTimerId !== null && typeof root.clearTimeout === "function") {
+          root.clearTimeout(retryTimerId);
+        }
+        if (typeof activeCleanup === "function") {
+          activeCleanup();
+        }
+      });
+
+      function clearTimers() {
+        if (timerId !== null && typeof root.clearTimeout === "function") {
+          root.clearTimeout(timerId);
+          timerId = null;
+        }
+      }
+
+      function emitFinalSuccess(payload) {
+        clearTimers();
+        if (d._aborted) {
+          return;
+        }
         if (typeof callback === "function") {
           callback(null, payload);
         }
         d.resolve(payload);
       }
 
-      function finishErr(err) {
+      function emitFinalError(err) {
+        clearTimers();
+        if (d._aborted) {
+          return;
+        }
         if (typeof callback === "function") {
           callback(err, null);
         }
         d.reject(err);
       }
 
-      if (typeof body === "object" && body !== null) {
-        if (typeof JSON !== "undefined" && typeof JSON.stringify === "function") {
-          body = JSON.stringify(body);
+      function runAttempt() {
+        var headers = {};
+        var key;
+        var body = opts.body;
+        var settled = false;
+        var controller;
+        var xhr;
+
+        if (d._aborted) {
+          return;
+        }
+
+        if (opts.headers) {
+          for (key in opts.headers) {
+            if (opts.headers.hasOwnProperty(key)) {
+              headers[key] = opts.headers[key];
+            }
+          }
+        }
+
+        if (typeof body === "object" && body !== null) {
+          body = safeStringify(body);
           if (!headers["Content-Type"] && !headers["content-type"]) {
             headers["Content-Type"] = "application/json";
           }
         }
-      }
 
-      if (typeof root.fetch === "function" && opts.transport !== "xhr") {
-        root.fetch(url, {
-          method: method,
-          headers: headers,
-          body: method === "GET" || method === "HEAD" ? undefined : body
-        }).then(function (res) {
-          return res.text().then(function (text) {
-            finishOk({
-              status: res.status,
-              ok: res.ok,
-              body: text,
-              transport: "fetch"
-            });
-          });
-        }, function (err) {
-          finishErr(err);
-        });
-        return d;
-      }
+        function handleAttemptFailure(err) {
+          if (settled || d._aborted) {
+            return;
+          }
+          settled = true;
+          clearTimers();
 
-      xhr = createXHR();
-      if (!xhr) {
-        finishErr(new Error("No HTTP transport available in this runtime."));
-        return d;
-      }
-
-      xhr.open(method, url, true);
-      for (headerKey in headers) {
-        if (headers.hasOwnProperty(headerKey)) {
-          xhr.setRequestHeader(headerKey, headers[headerKey]);
+          if (attempt < maxRetries && isRetryableError(err) && typeof root.setTimeout === "function") {
+            attempt++;
+            retryTimerId = root.setTimeout(function () {
+              runAttempt();
+            }, retryDelay * attempt);
+            return;
+          }
+          emitFinalError(err);
         }
-      }
 
-      xhr.onreadystatechange = function () {
-        if (xhr.readyState === 4) {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            finishOk({
-              status: xhr.status,
-              ok: true,
-              body: xhr.responseText,
-              transport: "xhr"
-            });
+        function handleAttemptSuccess(payload) {
+          if (settled || d._aborted) {
+            return;
+          }
+          settled = true;
+          clearTimers();
+          if (opts.parseJson === true && typeof payload.body === "string") {
+            try {
+              payload.json = safeParse(payload.body);
+            } catch (parseErr) {
+              handleAttemptFailure(parseErr);
+              return;
+            }
+          }
+          emitFinalSuccess(payload);
+        }
+
+        if (timeoutMs > 0 && typeof root.setTimeout === "function") {
+          timerId = root.setTimeout(function () {
+            var tErr = new Error("Request timed out after " + timeoutMs + "ms");
+            tErr.timeout = true;
+            if (typeof activeCleanup === "function") {
+              activeCleanup();
+            }
+            handleAttemptFailure(tErr);
+          }, timeoutMs);
+        }
+
+        // Fetch path (with AbortController when available)
+        if (typeof root.fetch === "function" && opts.transport !== "xhr") {
+          var fetchOpts = {
+            method: method,
+            headers: headers,
+            body: method === "GET" || method === "HEAD" ? undefined : body
+          };
+
+          if (typeof root.AbortController === "function") {
+            controller = new root.AbortController();
+            fetchOpts.signal = controller.signal;
+            activeCleanup = function () {
+              try {
+                controller.abort();
+              } catch (e) {}
+            };
           } else {
-            finishErr({
-              status: xhr.status,
-              ok: false,
-              body: xhr.responseText,
-              transport: "xhr"
-            });
+            activeCleanup = null;
+          }
+
+          root.fetch(url, fetchOpts).then(
+            function (res) {
+              return res.text().then(function (text) {
+                if (!res.ok) {
+                  handleAttemptFailure({
+                    status: res.status,
+                    ok: false,
+                    body: text,
+                    transport: "fetch"
+                  });
+                } else {
+                  handleAttemptSuccess({
+                    status: res.status,
+                    ok: true,
+                    body: text,
+                    transport: "fetch"
+                  });
+                }
+              });
+            },
+            function (err) {
+              handleAttemptFailure(err);
+            }
+          );
+          return;
+        }
+
+        // XHR / ActiveX path
+        xhr = createXHR();
+        if (!xhr) {
+          handleAttemptFailure(new Error("No HTTP transport available in this runtime."));
+          return;
+        }
+
+        activeCleanup = function () {
+          try {
+            xhr.abort();
+          } catch (e) {}
+        };
+
+        xhr.open(method, url, true);
+        for (key in headers) {
+          if (headers.hasOwnProperty(key)) {
+            xhr.setRequestHeader(key, headers[key]);
           }
         }
-      };
 
-      try {
-        xhr.send(method === "GET" || method === "HEAD" ? null : body);
-      } catch (sendErr) {
-        finishErr(sendErr);
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState === 4) {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              handleAttemptSuccess({
+                status: xhr.status,
+                ok: true,
+                body: xhr.responseText,
+                transport: "xhr"
+              });
+            } else {
+              handleAttemptFailure({
+                status: xhr.status,
+                ok: false,
+                body: xhr.responseText,
+                transport: "xhr"
+              });
+            }
+          }
+        };
+
+        try {
+          xhr.send(method === "GET" || method === "HEAD" ? null : body);
+        } catch (sendErr) {
+          handleAttemptFailure(sendErr);
+        }
       }
 
+      runAttempt();
       return d;
     },
 
-    // WebSocket wrapper when supported by host
     connectSocket: function (url, protocols) {
       var d = new Deferred();
       var ws;
@@ -239,7 +485,6 @@
       return d;
     },
 
-    // WebRTC DataChannel helper when RTCPeerConnection is available in host
     createDataChannelPeer: function (rtcConfig, label, channelOpts) {
       var d = new Deferred();
       var pc;
