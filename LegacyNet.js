@@ -1,6 +1,19 @@
 (function (root) {
   "use strict";
 
+  function getPeerConnectionCtor() {
+    if (typeof root.RTCPeerConnection === "function") {
+      return root.RTCPeerConnection;
+    }
+    if (typeof root.webkitRTCPeerConnection === "function") {
+      return root.webkitRTCPeerConnection;
+    }
+    if (typeof root.mozRTCPeerConnection === "function") {
+      return root.mozRTCPeerConnection;
+    }
+    return null;
+  }
+
   // Feature-based ECMAScript & host capability detection
   function detectCapabilities() {
     var hasPromise = typeof root.Promise === "function";
@@ -12,7 +25,7 @@
     var hasFetch = typeof root.fetch === "function";
     var hasAbortController = typeof root.AbortController === "function";
     var hasWebSocket = typeof root.WebSocket === "function";
-    var hasRTC = typeof root.RTCPeerConnection === "function";
+    var rtcCtor = getPeerConnectionCtor();
 
     var edition = "ES3";
     if (hasPromise || hasObjectAssign || hasFetch) {
@@ -31,7 +44,8 @@
       xhr: createXHR() !== null,
       abortController: hasAbortController,
       webSocket: hasWebSocket,
-      rtcPeerConnection: hasRTC
+      rtcPeerConnection: rtcCtor !== null,
+      rtcPrefixed: typeof root.RTCPeerConnection !== "function" && rtcCtor !== null
     };
   }
 
@@ -315,7 +329,7 @@
   var capabilities = detectCapabilities();
 
   var LegacyNet = {
-    version: "1.2.0-multi",
+    version: "1.3.0-multi",
     capabilities: capabilities,
     json: {
       stringify: safeStringify,
@@ -564,13 +578,15 @@
 
     createDataChannelPeer: function (rtcConfig, label, channelOpts) {
       var d = new Deferred();
+      var RtcCtor = getPeerConnectionCtor();
       var pc;
       var channel;
-      if (typeof root.RTCPeerConnection !== "function") {
+
+      if (!RtcCtor) {
         d.reject(new Error("RTCPeerConnection is not supported by this host environment."));
         return d;
       }
-      pc = new root.RTCPeerConnection(rtcConfig || {});
+      pc = new RtcCtor(rtcConfig || {});
       channel = pc.createDataChannel(label || "data", channelOpts || {});
       channel.onopen = function () {
         d.resolve({ peerConnection: pc, dataChannel: channel });
