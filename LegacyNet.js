@@ -48,6 +48,39 @@
     return false;
   }
 
+  function getKeys(obj) {
+    var out = [];
+    var key;
+    if (!obj || typeof obj !== "object") {
+      return out;
+    }
+    if (typeof Object.keys === "function") {
+      return Object.keys(obj);
+    }
+    for (key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        out.push(key);
+      }
+    }
+    return out;
+  }
+
+  function freezeSafe(obj) {
+    if (obj && typeof obj === "object" && typeof Object.freeze === "function") {
+      try {
+        return Object.freeze(obj);
+      } catch (e) {}
+    }
+    return obj;
+  }
+
+  function nowMs() {
+    if (typeof Date !== "undefined" && typeof Date.now === "function") {
+      return Date.now();
+    }
+    return new Date().getTime();
+  }
+
   function mergeObjects() {
     var target = {};
     var i;
@@ -184,7 +217,7 @@
     return es3Parse(text, reviver);
   }
 
-  // Promises/A+-style Deferred with async reaction dispatch and abort support
+  // Promises/A+-style Deferred with async reaction dispatch, finally, and abort support
   function Deferred(onAbort) {
     this._handlers = [];
     this._state = "pending";
@@ -306,6 +339,28 @@
     return this.then(null, onRejected);
   };
 
+  Deferred.prototype["finally"] = function (onFinally) {
+    if (typeof onFinally !== "function") {
+      return this.then(null, null);
+    }
+    return this.then(
+      function (val) {
+        var r = onFinally();
+        if (r && typeof r.then === "function") {
+          return r.then(function () { return val; });
+        }
+        return val;
+      },
+      function (err) {
+        var r = onFinally();
+        if (r && typeof r.then === "function") {
+          return r.then(function () { throw err; });
+        }
+        throw err;
+      }
+    );
+  };
+
   Deferred.prototype.toNativePromise = function () {
     var self = this;
     if (typeof root.Promise !== "function") {
@@ -318,6 +373,103 @@
       );
     });
   };
+
+  function asDeferred(item) {
+    var d = new Deferred();
+    if (item && typeof item.then === "function") {
+      item.then(
+        function (v) { d.resolve(v); },
+        function (e) { d.reject(e); }
+      );
+    } else {
+      d.resolve(item);
+    }
+    return d;
+  }
+
+  function allDeferred(items) {
+    var d = new Deferred();
+    var results = [];
+    var remaining;
+    var i;
+
+    if (!isArrayValue(items) || items.length === 0) {
+      d.resolve([]);
+      return d;
+    }
+
+    remaining = items.length;
+    for (i = 0; i < items.length; i++) {
+      (function (idx) {
+        asDeferred(items[idx]).then(
+          function (val) {
+            results[idx] = val;
+            remaining--;
+            if (remaining === 0) {
+              d.resolve(results);
+            }
+          },
+          function (err) {
+            d.reject(err);
+          }
+        );
+      })(i);
+    }
+    return d;
+  }
+
+  function raceDeferred(items) {
+    var d = new Deferred();
+    var i;
+
+    if (!isArrayValue(items)) {
+      d.reject(new TypeError("race expects an array."));
+      return d;
+    }
+
+    for (i = 0; i < items.length; i++) {
+      asDeferred(items[i]).then(
+        function (val) { d.resolve(val); },
+        function (err) { d.reject(err); }
+      );
+    }
+    return d;
+  }
+
+  function allSettledDeferred(items) {
+    var d = new Deferred();
+    var outcomes = [];
+    var remaining;
+    var i;
+
+    if (!isArrayValue(items) || items.length === 0) {
+      d.resolve([]);
+      return d;
+    }
+
+    remaining = items.length;
+    for (i = 0; i < items.length; i++) {
+      (function (idx) {
+        asDeferred(items[idx]).then(
+          function (val) {
+            outcomes[idx] = { status: "fulfilled", value: val };
+            remaining--;
+            if (remaining === 0) {
+              d.resolve(outcomes);
+            }
+          },
+          function (reason) {
+            outcomes[idx] = { status: "rejected", reason: reason };
+            remaining--;
+            if (remaining === 0) {
+              d.resolve(outcomes);
+            }
+          }
+        );
+      })(i);
+    }
+    return d;
+  }
 
   function createXHR() {
     var progIds = ["Msxml2.XMLHTTP.6.0", "Msxml2.XMLHTTP.3.0", "Microsoft.XMLHTTP"];
@@ -410,6 +562,8 @@
     var hasPromise = typeof root.Promise === "function";
     var hasArrayIsArray = typeof Array.isArray === "function";
     var hasObjectAssign = typeof Object.assign === "function";
+    var hasObjectKeys = typeof Object.keys === "function";
+    var hasDateNow = typeof Date !== "undefined" && typeof Date.now === "function";
     var hasJSON = typeof root.JSON !== "undefined" &&
       typeof root.JSON.parse === "function" &&
       typeof root.JSON.stringify === "function";
@@ -421,7 +575,7 @@
     var edition = "ES3";
     if (hasPromise || hasObjectAssign || hasFetch) {
       edition = "ES6+/ES2026-capable";
-    } else if (hasJSON || hasArrayIsArray) {
+    } else if (hasJSON || hasArrayIsArray || hasObjectKeys || hasDateNow) {
       edition = "ES5+";
     }
 
@@ -429,6 +583,8 @@
       detectedEdition: edition,
       es5ArrayIsArray: hasArrayIsArray,
       es5Json: hasJSON,
+      es5ObjectKeys: hasObjectKeys,
+      es5DateNow: hasDateNow,
       es6Promise: hasPromise,
       es6ObjectAssign: hasObjectAssign,
       fetch: hasFetch,
@@ -447,8 +603,14 @@
   var capabilities = detectCapabilities();
 
   var LegacyNet = {
-    version: "1.4.0-multi",
+    version: "1.5.0-multi",
     capabilities: capabilities,
+    deferred: function (onAbort) {
+      return new Deferred(onAbort);
+    },
+    all: allDeferred,
+    race: raceDeferred,
+    allSettled: allSettledDeferred,
     json: {
       stringify: safeStringify,
       parse: safeParse
@@ -456,6 +618,9 @@
     utils: {
       isArray: isArrayValue,
       merge: mergeObjects,
+      keys: getKeys,
+      freezeSafe: freezeSafe,
+      now: nowMs,
       isBinaryOrFormData: isBinaryOrFormData,
       readStreamChunks: readStreamChunks
     },
@@ -591,6 +756,10 @@
             body: method === "GET" || method === "HEAD" ? undefined : body
           };
 
+          if (typeof opts.credentials === "string") {
+            fetchOpts.credentials = opts.credentials;
+          }
+
           if (typeof root.AbortController === "function") {
             controller = new root.AbortController();
             fetchOpts.signal = controller.signal;
@@ -645,6 +814,12 @@
         if (!xhr) {
           handleAttemptFailure(new Error("No HTTP transport available in this runtime."));
           return;
+        }
+
+        if (typeof opts.withCredentials === "boolean") {
+          try {
+            xhr.withCredentials = opts.withCredentials;
+          } catch (wcErr) {}
         }
 
         if (responseType === "arraybuffer" || responseType === "blob") {
@@ -711,18 +886,50 @@
       return d;
     },
 
-    connectSocket: function (url, protocols) {
+    connectSocket: function (url, protocols, sockOpts) {
       var d = new Deferred();
+      var opts = sockOpts || {};
       var ws;
+      var pingTimer = null;
+
       if (typeof root.WebSocket !== "function") {
         d.reject(new Error("WebSocket is not supported by this host environment."));
         return d;
       }
       ws = protocols ? new root.WebSocket(url, protocols) : new root.WebSocket(url);
+
+      if (typeof opts.binaryType === "string") {
+        try {
+          ws.binaryType = opts.binaryType;
+        } catch (btErr) {}
+      }
+
+      function stopPing() {
+        if (pingTimer !== null && typeof root.clearInterval === "function") {
+          root.clearInterval(pingTimer);
+          pingTimer = null;
+        }
+      }
+
       ws.onopen = function (ev) {
-        d.resolve({ socket: ws, event: ev });
+        if (typeof opts.pingInterval === "number" && opts.pingInterval > 0 && typeof root.setInterval === "function") {
+          pingTimer = root.setInterval(function () {
+            if (ws.readyState === 1) {
+              try {
+                ws.send(opts.pingPayload || '{"type":"ping"}');
+              } catch (pErr) {}
+            }
+          }, opts.pingInterval);
+        }
+        d.resolve({ socket: ws, event: ev, stopPing: stopPing });
       };
+
+      ws.onclose = function () {
+        stopPing();
+      };
+
       ws.onerror = function (ev) {
+        stopPing();
         d.reject({ socket: ws, event: ev });
       };
       return d;
@@ -749,7 +956,6 @@
       return d;
     },
 
-    // WebRTC SDP offer/answer & ICE candidate signaling session
     createSignalingSession: function (opts) {
       var cfg = opts || {};
       var sendSignal = cfg.sendSignal;
