@@ -1,6 +1,76 @@
 (function (root) {
   "use strict";
 
+  // Feature-based ECMAScript & host capability detection
+  function detectCapabilities() {
+    var hasPromise = typeof root.Promise === "function";
+    var hasArrayIsArray = typeof Array.isArray === "function";
+    var hasObjectAssign = typeof Object.assign === "function";
+    var hasJSON = typeof root.JSON !== "undefined" &&
+      typeof root.JSON.parse === "function" &&
+      typeof root.JSON.stringify === "function";
+    var hasFetch = typeof root.fetch === "function";
+    var hasAbortController = typeof root.AbortController === "function";
+    var hasWebSocket = typeof root.WebSocket === "function";
+    var hasRTC = typeof root.RTCPeerConnection === "function";
+
+    var edition = "ES3";
+    if (hasPromise || hasObjectAssign || hasFetch) {
+      edition = "ES6+/ES2026-capable";
+    } else if (hasJSON || hasArrayIsArray) {
+      edition = "ES5+";
+    }
+
+    return {
+      detectedEdition: edition,
+      es5ArrayIsArray: hasArrayIsArray,
+      es5Json: hasJSON,
+      es6Promise: hasPromise,
+      es6ObjectAssign: hasObjectAssign,
+      fetch: hasFetch,
+      xhr: createXHR() !== null,
+      abortController: hasAbortController,
+      webSocket: hasWebSocket,
+      rtcPeerConnection: hasRTC
+    };
+  }
+
+  function isArrayValue(val) {
+    if (typeof Array.isArray === "function") {
+      return Array.isArray(val);
+    }
+    return val instanceof Array;
+  }
+
+  function mergeObjects() {
+    var target = {};
+    var i;
+    var key;
+    var src;
+
+    if (typeof Object.assign === "function") {
+      var args = [target];
+      for (i = 0; i < arguments.length; i++) {
+        if (arguments[i] && typeof arguments[i] === "object") {
+          args.push(arguments[i]);
+        }
+      }
+      return Object.assign.apply(Object, args);
+    }
+
+    for (i = 0; i < arguments.length; i++) {
+      src = arguments[i];
+      if (src && typeof src === "object") {
+        for (key in src) {
+          if (src.hasOwnProperty(key)) {
+            target[key] = src[key];
+          }
+        }
+      }
+    }
+    return target;
+  }
+
   // ES3-safe JSON helpers (uses native JSON when available, falls back cleanly)
   function escapeString(str) {
     return str
@@ -23,7 +93,7 @@
     if (type === "string") {
       return '"' + escapeString(val) + '"';
     }
-    if (val instanceof Array) {
+    if (isArrayValue(val)) {
       parts = [];
       for (i = 0; i < val.length; i++) {
         parts.push(es3Stringify(val[i]));
@@ -43,7 +113,6 @@
   }
 
   function es3Parse(text) {
-    // Controlled evaluation for ES3 environments without native JSON.parse
     if (typeof text !== "string") {
       return text;
     }
@@ -59,20 +128,20 @@
   }
 
   function safeStringify(val) {
-    if (typeof JSON !== "undefined" && typeof JSON.stringify === "function") {
-      return JSON.stringify(val);
+    if (typeof root.JSON !== "undefined" && typeof root.JSON.stringify === "function") {
+      return root.JSON.stringify(val);
     }
     return es3Stringify(val);
   }
 
   function safeParse(text) {
-    if (typeof JSON !== "undefined" && typeof JSON.parse === "function") {
-      return JSON.parse(text);
+    if (typeof root.JSON !== "undefined" && typeof root.JSON.parse === "function") {
+      return root.JSON.parse(text);
     }
     return es3Parse(text);
   }
 
-  // Minimal ES3-compatible Promise/callback helper with abort support
+  // Deferred wrapper that mirrors native Promise when present and stays ES3-safe when absent
   function Deferred(onAbort) {
     this._done = [];
     this._fail = [];
@@ -108,6 +177,7 @@
 
   Deferred.prototype.abort = function (reason) {
     var err;
+    var i;
     if (this._state !== "pending" || this._aborted) {
       return;
     }
@@ -121,7 +191,7 @@
     err.code = "ABORTED";
     this._state = "rejected";
     this._value = err;
-    for (var i = 0; i < this._fail.length; i++) {
+    for (i = 0; i < this._fail.length; i++) {
       this._fail[i](err);
     }
   };
@@ -167,6 +237,24 @@
     }
 
     return next;
+  };
+
+  Deferred.prototype["catch"] = function (onRejected) {
+    return this.then(null, onRejected);
+  };
+
+  // Optional bridge to a native ES6+ Promise (e.g. for async/await in modern runtimes)
+  Deferred.prototype.toNativePromise = function () {
+    var self = this;
+    if (typeof root.Promise !== "function") {
+      return null;
+    }
+    return new root.Promise(function (resolve, reject) {
+      self.then(
+        function (val) { resolve(val); },
+        function (err) { reject(err); }
+      );
+    });
   };
 
   // HTTP transport factory: XHR or IE ActiveX fallback
@@ -224,20 +312,19 @@
     return true;
   }
 
+  var capabilities = detectCapabilities();
+
   var LegacyNet = {
-    version: "1.1.0-es3",
+    version: "1.2.0-multi",
+    capabilities: capabilities,
     json: {
       stringify: safeStringify,
       parse: safeParse
     },
-    capabilities: {
-      fetch: typeof root.fetch === "function",
-      xhr: createXHR() !== null,
-      webSocket: typeof root.WebSocket === "function",
-      rtcPeerConnection: typeof root.RTCPeerConnection === "function",
-      abortController: typeof root.AbortController === "function"
+    utils: {
+      isArray: isArrayValue,
+      merge: mergeObjects
     },
-    // Explicit runtime & security boundaries enforced by the host environment
     limits: {
       missingProtocols:
         "ES3 JavaScript cannot create UDP sockets, run ICE/STUN/TURN negotiation, or perform DTLS/SRTP encryption for WebRTC on a runtime that lacks native WebRTC support.",
@@ -245,7 +332,6 @@
         "Even with a fallback transport, Same-Origin Policy, CORS, and TLS requirements are enforced by the host environment, not bypassed by the library."
     },
 
-    // Unified HTTP request with timeout, retries, abort, and ES3 JSON support
     request: function (opts, callback) {
       var method = (opts.method || "GET").toUpperCase();
       var url = appendQuery(opts.url, opts.params);
@@ -299,23 +385,16 @@
       }
 
       function runAttempt() {
-        var headers = {};
-        var key;
+        var headers = mergeObjects({}, opts.headers);
         var body = opts.body;
         var settled = false;
         var controller;
         var xhr;
+        var key;
+        var fetchOpts;
 
         if (d._aborted) {
           return;
-        }
-
-        if (opts.headers) {
-          for (key in opts.headers) {
-            if (opts.headers.hasOwnProperty(key)) {
-              headers[key] = opts.headers[key];
-            }
-          }
         }
 
         if (typeof body === "object" && body !== null) {
@@ -370,9 +449,8 @@
           }, timeoutMs);
         }
 
-        // Fetch path (with AbortController when available)
         if (typeof root.fetch === "function" && opts.transport !== "xhr") {
-          var fetchOpts = {
+          fetchOpts = {
             method: method,
             headers: headers,
             body: method === "GET" || method === "HEAD" ? undefined : body
@@ -417,7 +495,6 @@
           return;
         }
 
-        // XHR / ActiveX path
         xhr = createXHR();
         if (!xhr) {
           handleAttemptFailure(new Error("No HTTP transport available in this runtime."));
@@ -490,7 +567,7 @@
       var pc;
       var channel;
       if (typeof root.RTCPeerConnection !== "function") {
-        d.reject(new Error("RTCPeerConnection is not supported by this ES3/host environment."));
+        d.reject(new Error("RTCPeerConnection is not supported by this host environment."));
         return d;
       }
       pc = new root.RTCPeerConnection(rtcConfig || {});
