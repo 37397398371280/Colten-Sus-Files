@@ -186,7 +186,6 @@
     return target;
   }
 
-  // ES7 Array.prototype.includes helper
   function includesValue(arr, searchElement, fromIndex) {
     var len;
     var k;
@@ -215,7 +214,6 @@
     return false;
   }
 
-  // ES10 Array.prototype.flat & flatMap helpers
   function flatArray(arr, depth) {
     var d = typeof depth === "number" ? depth : 1;
     var out = [];
@@ -253,7 +251,6 @@
     return flatArray(mapped, 1);
   }
 
-  // ES12 String.prototype.replaceAll helper
   function replaceAllString(str, searchVal, replaceVal) {
     var s = String(str);
     var search = String(searchVal);
@@ -277,7 +274,6 @@
     return out;
   }
 
-  // ES13 .at() & Error cause helpers
   function atIndex(list, index) {
     var idx = typeof index === "number" ? (Math.trunc ? Math.trunc(index) : (index < 0 ? Math.ceil(index) : Math.floor(index))) : 0;
     if (!list || typeof list.length !== "number") {
@@ -303,7 +299,6 @@
     return target;
   }
 
-  // ES14 non-mutating array helpers & findLast / findLastIndex
   function toReversedArray(arr) {
     if (!isArrayValue(arr)) {
       return [];
@@ -394,7 +389,6 @@
     return -1;
   }
 
-  // ES15 groupBy & well-formed Unicode string helpers
   function groupByKey(items, keyFn) {
     var groups = {};
     var i;
@@ -466,7 +460,6 @@
     return out;
   }
 
-  // ES2026 Math.sumPrecise, Map.getOrInsert/Computed, Iterator.concat, Uint8Array hex/base64, JSON.rawJSON
   function sumPreciseNumbers(values) {
     var list = [];
     var sum = 0;
@@ -708,7 +701,6 @@
     return Boolean(val && typeof val === "object" && typeof val.__legacyRawJson === "string");
   }
 
-  // ES3-safe JSON helpers with reviver & rawJSON support
   function escapeString(str) {
     return str
       .replace(/\\/g, "\\\\")
@@ -823,7 +815,6 @@
     return es3Parse(text, reviver);
   }
 
-  // Promises/A+-style Deferred with async reaction dispatch, finally, and abort support
   function Deferred(onAbort) {
     this._handlers = [];
     this._state = "pending";
