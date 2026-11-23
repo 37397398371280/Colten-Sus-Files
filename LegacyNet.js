@@ -1399,7 +1399,7 @@
   var capabilities = detectCapabilities();
 
   var LegacyNet = {
-    version: "1.7.0 BETA",
+    version: "1.0.0 BETA",
     capabilities: capabilities,
     deferred: function (onAbort) {
       return new Deferred(onAbort);
