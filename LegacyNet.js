@@ -259,10 +259,6 @@
 
   var capabilities = detectCapabilities();
 
-  // =========================================================================
-  // DEFERRED & ASYNC COMBINATORS
-  // =========================================================================
-
   function Deferred(onAbort) {
     this._handlers = [];
     this._state = "pending";
@@ -662,10 +658,6 @@
     return d;
   }
 
-  // =========================================================================
-  // JSON + RAW JSON (ES3 + ES2026)
-  // =========================================================================
-
   function isRawJsonWrapper(val) {
     if (typeof root.JSON === "object" && root.JSON !== null && typeof root.JSON.isRawJSON === "function") {
       try {
@@ -807,10 +799,6 @@
     }
     return es3Parse(text, reviver);
   }
-
-  // =========================================================================
-  // UTILITIES (ES3 -> ES2026)
-  // =========================================================================
 
   function isErrorValue(val) {
     if (typeof root.Error === "function" && typeof root.Error.isError === "function") {
@@ -1312,10 +1300,6 @@
     pump();
   }
 
-  // =========================================================================
-  // HTTP REQUEST (FETCH / XHR / ACTIVEXOBJECT + RETRIES + TIMEOUT + STREAM)
-  // =========================================================================
-
   function buildUrlWithParams(url, params) {
     var keys = getKeys(params);
     var pairs = [];
@@ -1643,10 +1627,6 @@
     return d;
   }
 
-  // =========================================================================
-  // WEBSOCKET CLIENT
-  // =========================================================================
-
   function connectSocket(url, protocols, sockOpts) {
     var d = new Deferred();
     var opts = sockOpts || {};
@@ -1703,10 +1683,6 @@
 
     return d;
   }
-
-  // =========================================================================
-  // FROM-SCRATCH ES3 STUN / TURN PARSER, SDP CODEC & WEBRTC ENGINE
-  // =========================================================================
 
   function parseIceUrl(rawUrl) {
     var str = String(rawUrl || "");
@@ -2515,10 +2491,6 @@
       close: close
     };
   }
-
-  // =========================================================================
-  // PUBLIC LIBRARY SURFACE
-  // =========================================================================
 
   var LegacyNet = {
     version: "1.8.0-multi",
