@@ -110,7 +110,6 @@
     return target;
   }
 
-  // ES3-safe JSON helpers with reviver support
   function escapeString(str) {
     return str
       .replace(/\\/g, "\\\\")
@@ -217,7 +216,6 @@
     return es3Parse(text, reviver);
   }
 
-  // Promises/A+-style Deferred with async reaction dispatch, finally, and abort support
   function Deferred(onAbort) {
     this._handlers = [];
     this._state = "pending";
