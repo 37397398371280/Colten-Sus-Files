@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kids OS — App Launcher</title>
+    <!-- Load Tailwind CSS for responsive layout and utility styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Fredoka & Nunito Google Fonts for a soft, friendly toddler/kid aesthetic -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        /* =====================================================================
+           CUSTOM TODDLER OS STYLES, 3D SQUIRCLE BUTTONS & SCENERY ANIMATIONS
+           ===================================================================== */
+        :root {
+            --sky-top: #7DD3FC;
+            --sky-mid: #BAE6FD;
+            --sky-bottom: #E0F2FE;
+        }
+
+        * {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Fredoka', 'Nunito', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 58%, var(--sky-bottom) 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Gentle drifting cloud motion */
+        @keyframes driftSlow {
+            0% {
+                transform: translateX(-18vw);
+            }
+            100% {
+                transform: translateX(118vw);
+            }
+        }
+
+        @keyframes driftMedium {
+            0% {
+                transform: translateX(-25vw);
+            }
+            100% {
+                transform: translateX(120vw);
+            }
+        }
+
+        /* Friendly sun gentle rotation & bobbing */
+        @keyframes sunSpin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes gentleBob {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-6px);
+            }
+        }
+
+        .cloud-slow {
+            animation: driftSlow 58s linear infinite;
+        }
+
+        .cloud-medium {
+            animation: driftMedium 42s linear infinite;
+        }
+
+        .sun-rays {
+            animation: sunSpin 36s linear infinite;
+        }
+
+        .sun-bob {
+            animation: gentleBob 4.5s ease-in-out infinite;
+        }
+
+        /* Chunky 3D squircle app button with tactile depth */
+        .squircle-btn {
+            border-radius: 34px;
+            box-shadow:
+                0 10px 0 rgba(15, 23, 42, 0.16),
+                0 16px 26px rgba(14, 116, 144, 0.22),
+                inset 0 4px 8px rgba(255, 255, 255, 0.65),
+                inset 0 -4px 8px rgba(15, 23, 42, 0.12);
+            transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                        box-shadow 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                        filter 180ms ease;
+        }
+
+        .app-card:hover .squircle-btn,
+        .app-card:focus-visible .squircle-btn {
+            transform: translateY(-6px) scale(1.04);
+            box-shadow:
+                0 14px 0 rgba(15, 23, 42, 0.18),
+                0 22px 32px rgba(14, 116, 144, 0.28),
+                inset 0 4px 10px rgba(255, 255, 255, 0.78),
+                inset 0 -4px 8px rgba(15, 23, 42, 0.12);
+            filter: brightness(1.03);
+        }
+
+        .app-card:active .squircle-btn {
+            transform: translateY(6px) scale(0.96);
+            box-shadow:
+                0 3px 0 rgba(15, 23, 42, 0.18),
+                0 6px 12px rgba(14, 116, 144, 0.2),
+                inset 0 3px 6px rgba(255, 255, 255, 0.5),
+                inset 0 -2px 6px rgba(15, 23, 42, 0.18);
+        }
+
+        /* Chunky header pill button press effect */
+        .pill-btn {
+            box-shadow: 0 5px 0 rgba(15, 23, 42, 0.14), 0 8px 16px rgba(15, 23, 42, 0.08);
+            transition: transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 150ms ease;
+        }
+
+        .pill-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .pill-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 2px 0 rgba(15, 23, 42, 0.14);
+        }
+    </style>
+</head>
+<body class="relative flex flex-col justify-between min-h-screen text-slate-800">
+
+    <!-- ===================================================================== -->
+    <!-- CHEERFUL TODDLER OS BACKDROP: FRIENDLY SUN, DRIFTING CLOUDS & HILLS  -->
+    <!-- ===================================================================== -->
+    <div aria-hidden="true" class="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <!-- Friendly Smiling Sun in Top-Right Sky -->
+        <div class="sun-bob absolute top-6 right-5 sm:top-8 sm:right-12 w-24 h-24 sm:w-32 sm:h-32">
+            <svg viewBox="0 0 140 140" class="w-full h-full overflow-visible">
+                <!-- Rotating Sunbeams -->
+                <g class="sun-rays" style="transform-origin: 70px 70px;">
+                    <line x1="70" y1="6" x2="70" y2="20" stroke="#FBBF24" stroke-width="8" stroke-linecap="round" />
+                    <line x1="70" y1="120" x2="70" y2="134" stroke="#FBBF24" stroke-width="8" stroke-linecap="round" />
+                    <line x1="6" y1="70" x2="20" y2="70" stroke="#FBBF24" stroke-width="8" stroke-linecap="round" />
+                    <line x1="120" y1="70" x2="134" y2="70" stroke="#FBBF24" stroke-width="8" stroke-linecap="round" />
+                    <line x1="24.7" y1="24.7" x2="34.6" y2="34.6" stroke="#F59E0B" stroke-width="7" stroke-linecap="round" />
+                    <line x1="105.4" y1="105.4" x2="115.3" y2="115.3" stroke="#F59E0B" stroke-width="7" stroke-linecap="round" />
+                    <line x1="115.3" y1="24.7" x2="105.4" y2="34.6" stroke="#F59E0B" stroke-width="7" stroke-linecap="round" />
+                    <line x1="34.6" y1="105.4" x2="24.7" y2="115.3" stroke="#F59E0B" stroke-width="7" stroke-linecap="round" />
+                </g>
+                <!-- Sun Face Circle -->
+                <circle cx="70" cy="70" r="38" fill="#FDE047" stroke="#F59E0B" stroke-width="4" />
+                <!-- Rosy Cheeks -->
+                <ellipse cx="52" cy="76" rx="6" ry="4" fill="#FB7185" opacity="0.55" />
+                <ellipse cx="88" cy="76" rx="6" ry="4" fill="#FB7185" opacity="0.55" />
+                <!-- Happy Eyes & Smile -->
+                <circle cx="58" cy="65" r="4.5" fill="#451A03" />
+                <circle cx="82" cy="65" r="4.5" fill="#451A03" />
+                <circle cx="59.5" cy="63.5" r="1.5" fill="#FFFFFF" />
+                <circle cx="83.5" cy="63.5" r="1.5" fill="#FFFFFF" />
+                <path d="M 58 77 Q 70 88 82 77" fill="none" stroke="#451A03" stroke-width="4" stroke-linecap="round" />
+            </svg>
+        </div>
+
+        <!-- Drifting Fluffy Clouds -->
+        <div class="cloud-slow absolute top-10 left-0 opacity-90" style="animation-delay: -8s;">
+            <svg width="160" height="72" viewBox="0 0 160 72" class="w-32 sm:w-44 h-auto">
+                <path d="M34 62 H128 A22 22 0 0 0 130 18 A32 32 0 0 0 68 14 A26 26 0 0 0 34 62 Z" fill="#FFFFFF" />
+            </svg>
+        </div>
+
+        <div class="cloud-medium absolute top-32 left-0 opacity-80" style="animation-delay: -24s;">
+            <svg width="130" height="58" viewBox="0 0 130 58" class="w-24 sm:w-32 h-auto">
+                <path d="M26 50 H104 A18 18 0 0 0 106 14 A26 26 0 0 0 56 12 A21 21 0 0 0 26 50 Z" fill="#FFFFFF" />
+            </svg>
+        </div>
+
+        <!-- Soft Rolling Green Hills along Bottom Edge -->
+        <svg viewBox="0 0 1440 260" preserveAspectRatio="none" class="absolute bottom-0 left-0 w-full h-36 sm:h-52">
+            <!-- Back Hill -->
+            <path d="M0,125 C280,55 540,175 860,115 C1120,65 1290,110 1440,85 L1440,260 L0,260 Z" fill="#86EFAC" />
+            <!-- Front Hill -->
+            <path d="M0,165 C340,110 660,215 1040,150 C1230,118 1350,145 1440,130 L1440,260 L0,260 Z" fill="#4ADE80" />
+            <!-- Little Decorative Wildflowers -->
+            <circle cx="190" cy="185" r="5" fill="#FEF08A" />
+            <circle cx="520" cy="198" r="5" fill="#FBCFE8" />
+            <circle cx="960" cy="180" r="5" fill="#FEF08A" />
+            <circle cx="1260" cy="172" r="5" fill="#FFFFFF" />
+        </svg>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TOP OS STATUS BAR: BRAND BADGE, FRIENDLY GREETING, CLOCK & SOUND      -->
+    <!-- ===================================================================== -->
+    <header class="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6">
+        <div class="bg-white/85 backdrop-blur-md border-4 border-white rounded-[28px] px-4 py-3 sm:px-6 sm:py-3.5 shadow-lg flex flex-wrap items-center justify-between gap-3">
+            <!-- OS Brand Pill -->
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center text-2xl sm:text-3xl shadow-inner border-2 border-white">
+                    🌈
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 leading-none">
+                        Kids OS
+                    </h1>
+                    <p id="greeting-text" class="text-xs sm:text-sm font-bold text-sky-600 mt-0.5">
+                        Let’s Play &amp; Explore!
+                    </p>
+                </div>
+            </div>
+
+            <!-- Center Status Clock -->
+            <div class="hidden md:flex items-center gap-2 bg-sky-100/90 border-2 border-sky-200 px-4 py-1.5 rounded-full text-sky-900 font-bold text-lg">
+                <span>🕒</span>
+                <span id="os-clock-desktop">--:--</span>
+            </div>
+
+            <!-- Right Controls: Mobile Clock & Sound Pop Toggle -->
+            <div class="flex items-center gap-2.5">
+                <div class="flex md:hidden items-center gap-1.5 bg-sky-100/90 border-2 border-sky-200 px-3 py-1.5 rounded-full text-sky-900 font-bold text-sm">
+                    <span>🕒</span>
+                    <span id="os-clock-mobile">--:--</span>
+                </div>
+
+                <button
+                    id="sound-toggle-btn"
+                    type="button"
+                    onclick="toggleSound()"
+                    aria-label="Toggle tap sound"
+                    class="pill-btn bg-amber-300 hover:bg-amber-400 text-amber-950 border-2 border-amber-100 rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 flex items-center gap-2 font-bold text-sm sm:text-base cursor-pointer"
+                >
+                    <span id="sound-icon" class="text-lg sm:text-xl leading-none">🔊</span>
+                    <span id="sound-label">Sound On</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ===================================================================== -->
+    <!-- MAIN APP GRID: RENDERS CHUNKY 3D APP BUTTONS FROM `KIDS_APPS`          -->
+    <!-- ===================================================================== -->
+    <main class="relative z-10 flex-1 w-full max-w-6xl mx-auto px-4 sm:px-8 py-6 sm:py-10 flex flex-col justify-center">
+        <div
+            id="apps-grid"
+            class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 sm:gap-8 md:gap-10 justify-items-center"
+        >
+            <!-- App tiles are generated dynamically by renderKidsApps() -->
+        </div>
+
+        <!-- Friendly Empty Fallback if KIDS_APPS is left empty -->
+        <div
+            id="empty-list-message"
+            class="hidden max-w-md mx-auto bg-white/90 backdrop-blur-md border-4 border-white rounded-[32px] p-8 text-center shadow-xl"
+        >
+            <div class="text-6xl mb-3">🎈</div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">No Apps Added Yet</h2>
+            <p class="text-slate-600 font-semibold text-base">
+                Open this HTML file and add websites to the <code class="bg-sky-100 text-sky-800 px-2 py-0.5 rounded-lg">KIDS_APPS</code> list!
+            </p>
+        </div>
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- SOFT LAUNCH OVERLAY: BRIEF CELEBRATION BEFORE OPENING IN SAME TAB      -->
+    <!-- ===================================================================== -->
+    <div
+        id="launch-overlay"
+        class="hidden fixed inset-0 z-50 bg-sky-400/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center text-white"
+    >
+        <div
+            id="launch-preview-badge"
+            class="w-32 h-32 sm:w-36 sm:h-36 rounded-[36px] bg-white border-4 border-white shadow-2xl flex items-center justify-center p-4 mb-5 animate-bounce"
+        >
+            <!-- Populated dynamically with favicon or fallback -->
+        </div>
+        <p class="text-2xl sm:text-4xl font-bold drop-shadow">
+            Opening <span id="launch-app-name">App</span>!
+        </p>
+        <p class="text-lg sm:text-xl text-sky-50 font-semibold mt-1">
+            ✨ Off we go! ✨
+        </p>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- SIMPLE TODDLER DOCK FOOTER                                            -->
+    <!-- ===================================================================== -->
+    <footer class="relative z-10 pb-5 pt-2 px-4 flex justify-center">
+        <div class="bg-white/80 backdrop-blur-md border-2 border-white px-5 py-2 rounded-full shadow-md flex items-center gap-2.5 text-sm sm:text-base font-bold text-slate-700">
+            <span class="w-3 h-3 rounded-full bg-rose-400"></span>
+            <span>Tap a big button to start!</span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+        </div>
+    </footer>
+
+    <!-- ===================================================================== -->
+    <!-- KIDS OS CONFIGURATION & LAUNCHER SCRIPT                               -->
+    <!-- ===================================================================== -->
+    <script>
+        /* =====================================================================
+           CUSTOMIZE YOUR WEBSITE LIST RIGHT HERE (`KIDS_APPS`)
+           ---------------------------------------------------------------------
+           Each object supports:
+           - name          (required): Label shown under the app button
+           - url           (required): Website URL (opens in the same tab)
+           - fallbackEmoji (optional): Emoji shown if favicon fails to load
+           - color         (optional): Hex color for the 3D squircle button
+           ===================================================================== */
+        const KIDS_APPS = [
+            {
+                name: "Bluey",
+                url: "https://bluey.tv",
+                fallbackEmoji: "🐾",
+                color: "#88cafc"
+            },
+            {
+                name: "The Bluey Movie",
+                url: "https://thebluey.movie",
+                fallbackEmoji: "🐾",
+                color: "#88cafc"
+            }
+        ];
+
+        // Palette & emojis used automatically when `color` or `fallbackEmoji` is omitted
+        const PALETTE_COLORS = [
+            "#38BDF8", "#FBBF24", "#4ADE80", "#FB7185",
+            "#A78BFA", "#34D399", "#FB923C", "#F472B6"
+        ];
+        const DEFAULT_EMOJIS = ["🌈", "🎨", "🧩", "🧸", "🦄", "🚂", "🎈", "🐬"];
+        const SOUND_PREF_KEY = "kids_os_sound_enabled";
+
+        let soundEnabled = true;
+        let audioContext = null;
+
+        // Initialize UI on page load
+        window.addEventListener("DOMContentLoaded", () => {
+            initSoundSetting();
+            updateClockAndGreeting();
+            setInterval(updateClockAndGreeting, 15000);
+            renderKidsApps();
+        });
+
+        /* -------------------------------------------------------------------
+           GENTLE WEB AUDIO API SOUND EFFECTS (NO EXTERNAL AUDIO FILES)
+           ------------------------------------------------------------------- */
+        function getAudioContext() {
+            try {
+                if (!audioContext) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) {
+                        audioContext = new AudioCtx();
+                    }
+                }
+                if (audioContext && audioContext.state === "suspended") {
+                    audioContext.resume();
+                }
+                return audioContext;
+            } catch (err) {
+                return null;
+            }
+        }
+
+        function playSound(effect = "pop") {
+            if (!soundEnabled) return;
+            try {
+                const ctx = getAudioContext();
+                if (!ctx) return;
+
+                const now = ctx.currentTime;
+
+                if (effect === "pop") {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = "sine";
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.exponentialRampToValueAtTime(780, now + 0.09);
+
+                    gain.gain.setValueAtTime(0.16, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.12);
+                } else if (effect === "chime") {
+                    // Cheerful ascending chime notes (C5 - E5 - G5)
+                    const notes = [523.25, 659.25, 783.99];
+                    notes.forEach((freq, i) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = "triangle";
+
+                        const startTime = now + i * 0.065;
+                        osc.frequency.setValueAtTime(freq, startTime);
+
+                        gain.gain.setValueAtTime(0.18, startTime);
+                        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.22);
+
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start(startTime);
+                        osc.stop(startTime + 0.24);
+                    });
+                }
+            } catch (err) {
+                // Ignore audio errors if blocked by browser autoplay policy
+            }
+        }
+
+        function initSoundSetting() {
+            try {
+                const saved = localStorage.getItem(SOUND_PREF_KEY);
+                soundEnabled = saved === null ? true : saved === "true";
+            } catch (err) {
+                soundEnabled = true;
+            }
+            refreshSoundButton();
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            try {
+                localStorage.setItem(SOUND_PREF_KEY, String(soundEnabled));
+            } catch (err) {
+                // Ignore storage errors in restricted contexts
+            }
+            refreshSoundButton();
+            if (soundEnabled) {
+                playSound("pop");
+            }
+        }
+
+        function refreshSoundButton() {
+            const iconEl = document.getElementById("sound-icon");
+            const labelEl = document.getElementById("sound-label");
+            const btnEl = document.getElementById("sound-toggle-btn");
+
+            if (soundEnabled) {
+                iconEl.textContent = "🔊";
+                labelEl.textContent = "Sound On";
+                btnEl.className = "pill-btn bg-amber-300 hover:bg-amber-400 text-amber-950 border-2 border-amber-100 rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 flex items-center gap-2 font-bold text-sm sm:text-base cursor-pointer";
+            } else {
+                iconEl.textContent = "🔇";
+                labelEl.textContent = "Sound Off";
+                btnEl.className = "pill-btn bg-slate-200 hover:bg-slate-300 text-slate-600 border-2 border-white rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 flex items-center gap-2 font-bold text-sm sm:text-base cursor-pointer";
+            }
+        }
+
+        /* -------------------------------------------------------------------
+           OS CLOCK & TIME-OF-DAY GREETING
+           ------------------------------------------------------------------- */
+        function updateClockAndGreeting() {
+            const now = new Date();
+            const hour = now.getHours();
+            const formattedTime = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+            document.getElementById("os-clock-desktop").textContent = formattedTime;
+            document.getElementById("os-clock-mobile").textContent = formattedTime;
+
+            const greetingEl = document.getElementById("greeting-text");
+            if (hour < 12) {
+                greetingEl.textContent = "Good Morning! Ready to Play?";
+            } else if (hour < 17) {
+                greetingEl.textContent = "Hi Friend! Let’s Explore!";
+            } else if (hour < 21) {
+                greetingEl.textContent = "Good Evening! Time for Fun!";
+            } else {
+                greetingEl.textContent = "Cozy Nighttime Play!";
+            }
+        }
+
+        /* -------------------------------------------------------------------
+           URL NORMALIZATION & FAVICON RESOLUTION WITH SMOOTH FALLBACKS
+           ------------------------------------------------------------------- */
+        function normalizeUrl(rawUrl) {
+            const trimmed = (rawUrl || "").trim();
+            if (!trimmed) return "";
+            if (/^https?:\/\//i.test(trimmed)) {
+                return trimmed;
+            }
+            return `https://${trimmed}`;
+        }
+
+        function extractHostname(url) {
+            try {
+                return new URL(normalizeUrl(url)).hostname;
+            } catch (err) {
+                return "";
+            }
+        }
+
+        function getPrimaryFaviconUrl(url) {
+            const domain = extractHostname(url);
+            if (!domain) return "";
+            return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
+        }
+
+        function getSecondaryFaviconUrl(url) {
+            const domain = extractHostname(url);
+            if (!domain) return "";
+            return `https://icon.horse/icon/${encodeURIComponent(domain)}`;
+        }
+
+        /**
+         * Creates an icon element that tries Google's high-res favicon service first,
+         * falls back to icon.horse, and finally shows `fallbackEmoji` or the app's first letter.
+         */
+        function createFaviconElement(app, sizeClasses) {
+            const container = document.createElement("div");
+            container.className = "w-full h-full flex items-center justify-center";
+
+            const firstLetter = (app.name || "?").trim().charAt(0).toUpperCase() || "?";
+            const fallbackText = app.fallbackEmoji ? app.fallbackEmoji.trim() : firstLetter;
+            const isEmoji = Boolean(app.fallbackEmoji && app.fallbackEmoji.trim().length > 0);
+
+            const fallbackEl = document.createElement("span");
+            fallbackEl.textContent = fallbackText;
+            fallbackEl.className = isEmoji
+                ? "hidden text-5xl sm:text-6xl leading-none"
+                : "hidden text-4xl sm:text-5xl font-extrabold text-slate-700 leading-none";
+
+            const primarySrc = getPrimaryFaviconUrl(app.url);
+            const secondarySrc = getSecondaryFaviconUrl(app.url);
+
+            if (!primarySrc) {
+                fallbackEl.classList.remove("hidden");
+                container.appendChild(fallbackEl);
+                return container;
+            }
+
+            const img = document.createElement("img");
+            img.src = primarySrc;
+            img.alt = `${app.name} icon`;
+            img.loading = "eager";
+            img.className = `${sizeClasses} object-contain rounded-2xl`;
+
+            let triedSecondary = false;
+
+            img.onload = () => {
+                // Google s2 sometimes returns a tiny 16x16 default globe; try secondary or fallback
+                if (img.naturalWidth <= 16 && img.naturalHeight <= 16) {
+                    if (!triedSecondary && secondarySrc) {
+                        triedSecondary = true;
+                        img.src = secondarySrc;
+                    } else {
+                        img.classList.add("hidden");
+                        fallbackEl.classList.remove("hidden");
+                    }
+                }
+            };
+
+            img.onerror = () => {
+                if (!triedSecondary && secondarySrc) {
+                    triedSecondary = true;
+                    img.src = secondarySrc;
+                } else {
+                    img.classList.add("hidden");
+                    fallbackEl.classList.remove("hidden");
+                }
+            };
+
+            container.appendChild(img);
+            container.appendChild(fallbackEl);
+            return container;
+        }
+
+        /* -------------------------------------------------------------------
+           RENDER CHUNKY 3D SQUIRCLE APP BUTTONS & HANDLE SAME-TAB LAUNCH
+           ------------------------------------------------------------------- */
+        function darkenColor(hex, amount = 24) {
+            if (!/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(hex || "")) {
+                return "#0284C7";
+            }
+            let clean = hex.slice(1);
+            if (clean.length === 3) {
+                clean = clean.split("").map(ch => ch + ch).join("");
+            }
+            const num = parseInt(clean, 16);
+            const r = Math.max(0, ((num >> 16) & 255) - amount);
+            const g = Math.max(0, ((num >> 8) & 255) - amount);
+            const b = Math.max(0, (num & 255) - amount);
+            return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+        }
+
+        function renderKidsApps() {
+            const grid = document.getElementById("apps-grid");
+            const emptyMsg = document.getElementById("empty-list-message");
+            grid.innerHTML = "";
+
+            const items = Array.isArray(KIDS_APPS)
+                ? KIDS_APPS.filter(app => app && app.name && app.url)
+                : [];
+
+            if (items.length === 0) {
+                grid.classList.add("hidden");
+                emptyMsg.classList.remove("hidden");
+                return;
+            }
+
+            grid.classList.remove("hidden");
+            emptyMsg.classList.add("hidden");
+
+            items.forEach((rawApp, idx) => {
+                const app = {
+                    name: String(rawApp.name).trim(),
+                    url: normalizeUrl(rawApp.url),
+                    color: rawApp.color || PALETTE_COLORS[idx % PALETTE_COLORS.length],
+                    fallbackEmoji: rawApp.fallbackEmoji || DEFAULT_EMOJIS[idx % DEFAULT_EMOJIS.length]
+                };
+
+                // Same-tab anchor link (`target="_self"`)
+                const link = document.createElement("a");
+                link.href = app.url;
+                link.target = "_self";
+                link.rel = "noopener noreferrer";
+                link.className = "app-card group flex flex-col items-center w-36 sm:w-44 focus:outline-none cursor-pointer";
+                link.setAttribute("aria-label", `Open ${app.name}`);
+
+                // Chunky 3D Squircle Button Surface
+                const squircle = document.createElement("div");
+                squircle.className = "squircle-btn w-28 h-28 sm:w-36 sm:h-36 p-3.5 sm:p-4 flex items-center justify-center border-4 border-white";
+                squircle.style.background = `linear-gradient(150deg, ${app.color} 0%, ${darkenColor(app.color, 26)} 100%)`;
+
+                // Crisp White Inner Icon Well
+                const innerWell = document.createElement("div");
+                innerWell.className = "w-full h-full bg-white/95 rounded-[22px] flex items-center justify-center p-2.5 shadow-inner";
+                innerWell.appendChild(createFaviconElement(app, "w-14 h-14 sm:w-20 sm:h-20"));
+
+                squircle.appendChild(innerWell);
+
+                // Big Friendly App Title Pill
+                const titlePill = document.createElement("span");
+                titlePill.textContent = app.name;
+                titlePill.className = "mt-3.5 px-3.5 py-1 rounded-full bg-white/90 group-hover:bg-white text-slate-800 font-bold text-base sm:text-lg shadow-sm border-2 border-white max-w-full truncate transition-transform duration-150 group-hover:scale-105";
+
+                // Tap/click handler: play chime, show quick launch feedback, and open in same tab
+                link.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    openAppInSameTab(app);
+                });
+
+                link.appendChild(squircle);
+                link.appendChild(titlePill);
+                grid.appendChild(link);
+            });
+        }
+
+        function openAppInSameTab(app) {
+            playSound("chime");
+
+            const overlay = document.getElementById("launch-overlay");
+            const badge = document.getElementById("launch-preview-badge");
+            const nameEl = document.getElementById("launch-app-name");
+
+            nameEl.textContent = app.name;
+            badge.innerHTML = "";
+            badge.appendChild(createFaviconElement(app, "w-20 h-20 sm:w-24 sm:h-24"));
+
+            overlay.classList.remove("hidden");
+
+            setTimeout(() => {
+                window.location.href = app.url;
+            }, 320);
+        }
+    </script>
+</body>
+</html>
