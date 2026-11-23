@@ -41,6 +41,13 @@
     return val instanceof Array;
   }
 
+  function isErrorValue(val) {
+    if (typeof root.Error !== "undefined" && typeof root.Error.isError === "function") {
+      return root.Error.isError(val);
+    }
+    return val instanceof Error;
+  }
+
   function isBinaryOrFormData(val) {
     if (!val || typeof val !== "object") {
       return false;
@@ -272,7 +279,7 @@
 
   // ES13 .at() & Error cause helpers
   function atIndex(list, index) {
-    var idx = typeof index === "number" ? Math.trunc ? Math.trunc(index) : (index < 0 ? Math.ceil(index) : Math.floor(index)) : 0;
+    var idx = typeof index === "number" ? (Math.trunc ? Math.trunc(index) : (index < 0 ? Math.ceil(index) : Math.floor(index))) : 0;
     if (!list || typeof list.length !== "number") {
       return undefined;
     }
@@ -289,7 +296,7 @@
   }
 
   function withCause(err, cause) {
-    var target = err instanceof Error ? err : new Error(String(err || "Error"));
+    var target = isErrorValue(err) ? err : new Error(String(err || "Error"));
     if (cause !== undefined) {
       target.cause = cause;
     }
@@ -459,7 +466,249 @@
     return out;
   }
 
-  // ES3-safe JSON helpers with reviver support
+  // ES2026 Math.sumPrecise, Map.getOrInsert/Computed, Iterator.concat, Uint8Array hex/base64, JSON.rawJSON
+  function sumPreciseNumbers(values) {
+    var list = [];
+    var sum = 0;
+    var comp = 0;
+    var seenAny = false;
+    var allNegZero = true;
+    var i;
+    var n;
+    var y;
+    var t;
+
+    if (typeof Math !== "undefined" && typeof Math.sumPrecise === "function") {
+      try {
+        return Math.sumPrecise(values);
+      } catch (e) {}
+    }
+
+    if (isArrayValue(values)) {
+      list = values;
+    } else if (values && typeof values.length === "number") {
+      for (i = 0; i < values.length; i++) {
+        list.push(values[i]);
+      }
+    }
+
+    for (i = 0; i < list.length; i++) {
+      n = list[i];
+      if (typeof n !== "number") {
+        throw new TypeError("sumPrecise requires number elements.");
+      }
+      seenAny = true;
+      if (!(n === 0 && 1 / n === -Infinity)) {
+        allNegZero = false;
+      }
+      y = n - comp;
+      t = sum + y;
+      comp = (t - sum) - y;
+      sum = t;
+    }
+
+    if (!seenAny || (sum === 0 && allNegZero)) {
+      return -0;
+    }
+    return sum;
+  }
+
+  function mapGetOrInsert(mapOrStore, key, defaultValue) {
+    if (mapOrStore && typeof mapOrStore.getOrInsert === "function") {
+      return mapOrStore.getOrInsert(key, defaultValue);
+    }
+    if (mapOrStore && typeof mapOrStore.has === "function" && typeof mapOrStore.set === "function") {
+      if (mapOrStore.has(key)) {
+        return mapOrStore.get(key);
+      }
+      mapOrStore.set(key, defaultValue);
+      return defaultValue;
+    }
+    if (mapOrStore && typeof mapOrStore === "object") {
+      var k = String(key);
+      if (!mapOrStore.hasOwnProperty(k)) {
+        mapOrStore[k] = defaultValue;
+      }
+      return mapOrStore[k];
+    }
+    return defaultValue;
+  }
+
+  function mapGetOrInsertComputed(mapOrStore, key, callbackFn) {
+    var computed;
+    if (mapOrStore && typeof mapOrStore.getOrInsertComputed === "function") {
+      return mapOrStore.getOrInsertComputed(key, callbackFn);
+    }
+    if (mapOrStore && typeof mapOrStore.has === "function" && typeof mapOrStore.set === "function") {
+      if (mapOrStore.has(key)) {
+        return mapOrStore.get(key);
+      }
+      computed = typeof callbackFn === "function" ? callbackFn(key) : undefined;
+      mapOrStore.set(key, computed);
+      return computed;
+    }
+    if (mapOrStore && typeof mapOrStore === "object") {
+      var k = String(key);
+      if (!mapOrStore.hasOwnProperty(k)) {
+        mapOrStore[k] = typeof callbackFn === "function" ? callbackFn(key) : undefined;
+      }
+      return mapOrStore[k];
+    }
+    return typeof callbackFn === "function" ? callbackFn(key) : undefined;
+  }
+
+  function concatIterables() {
+    var out = [];
+    var i;
+    var j;
+    var item;
+    if (typeof root.Iterator !== "undefined" && typeof root.Iterator.concat === "function") {
+      try {
+        return root.Iterator.concat.apply(root.Iterator, arguments);
+      } catch (e) {}
+    }
+    for (i = 0; i < arguments.length; i++) {
+      item = arguments[i];
+      if (isArrayValue(item)) {
+        for (j = 0; j < item.length; j++) {
+          out.push(item[j]);
+        }
+      } else if (item && typeof item.length === "number" && typeof item !== "string") {
+        for (j = 0; j < item.length; j++) {
+          out.push(item[j]);
+        }
+      } else if (item !== undefined) {
+        out.push(item);
+      }
+    }
+    return out;
+  }
+
+  var HEX_CHARS = "0123456789abcdef";
+  var B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+  function bytesToHex(bytes) {
+    var out = "";
+    var i;
+    var b;
+    if (!bytes) {
+      return "";
+    }
+    if (typeof bytes.toHex === "function") {
+      return bytes.toHex();
+    }
+    for (i = 0; i < bytes.length; i++) {
+      b = bytes[i] & 0xff;
+      out += HEX_CHARS.charAt((b >> 4) & 0x0f) + HEX_CHARS.charAt(b & 0x0f);
+    }
+    return out;
+  }
+
+  function hexToBytes(hexStr) {
+    var clean = String(hexStr || "").replace(/\s+/g, "");
+    var len = clean.length;
+    var outArr = [];
+    var i;
+    var hi;
+    var lo;
+
+    if (len % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(clean)) {
+      throw new SyntaxError("Invalid hex string");
+    }
+    if (typeof root.Uint8Array !== "undefined" && typeof root.Uint8Array.fromHex === "function") {
+      return root.Uint8Array.fromHex(clean);
+    }
+    for (i = 0; i < len; i += 2) {
+      hi = parseInt(clean.charAt(i), 16);
+      lo = parseInt(clean.charAt(i + 1), 16);
+      outArr.push((hi << 4) | lo);
+    }
+    if (typeof root.Uint8Array !== "undefined") {
+      return new root.Uint8Array(outArr);
+    }
+    return outArr;
+  }
+
+  function bytesToBase64(bytes) {
+    var out = "";
+    var i;
+    var b1;
+    var b2;
+    var b3;
+
+    if (!bytes) {
+      return "";
+    }
+    if (typeof bytes.toBase64 === "function") {
+      return bytes.toBase64();
+    }
+    for (i = 0; i < bytes.length; i += 3) {
+      b1 = bytes[i] & 0xff;
+      b2 = i + 1 < bytes.length ? bytes[i + 1] & 0xff : NaN;
+      b3 = i + 2 < bytes.length ? bytes[i + 2] & 0xff : NaN;
+
+      out += B64_CHARS.charAt(b1 >> 2);
+      out += B64_CHARS.charAt(((b1 & 0x03) << 4) | (isNaN(b2) ? 0 : (b2 >> 4)));
+      if (isNaN(b2)) {
+        out += "==";
+      } else {
+        out += B64_CHARS.charAt(((b2 & 0x0f) << 2) | (isNaN(b3) ? 0 : (b3 >> 6)));
+        out += isNaN(b3) ? "=" : B64_CHARS.charAt(b3 & 0x3f);
+      }
+    }
+    return out;
+  }
+
+  function base64ToBytes(b64Str) {
+    var clean = String(b64Str || "").replace(/[\s=]+$/g, "");
+    var outArr = [];
+    var i;
+    var c1;
+    var c2;
+    var c3;
+    var c4;
+
+    if (typeof root.Uint8Array !== "undefined" && typeof root.Uint8Array.fromBase64 === "function") {
+      return root.Uint8Array.fromBase64(String(b64Str || ""));
+    }
+    for (i = 0; i < clean.length; i += 4) {
+      c1 = B64_CHARS.indexOf(clean.charAt(i));
+      c2 = i + 1 < clean.length ? B64_CHARS.indexOf(clean.charAt(i + 1)) : -1;
+      c3 = i + 2 < clean.length ? B64_CHARS.indexOf(clean.charAt(i + 2)) : -1;
+      c4 = i + 3 < clean.length ? B64_CHARS.indexOf(clean.charAt(i + 3)) : -1;
+      if (c1 < 0 || c2 < 0) {
+        throw new SyntaxError("Invalid base64 string");
+      }
+      outArr.push((c1 << 2) | (c2 >> 4));
+      if (c3 >= 0) {
+        outArr.push(((c2 & 0x0f) << 4) | (c3 >> 2));
+      }
+      if (c4 >= 0) {
+        outArr.push(((c3 & 0x03) << 6) | c4);
+      }
+    }
+    if (typeof root.Uint8Array !== "undefined") {
+      return new root.Uint8Array(outArr);
+    }
+    return outArr;
+  }
+
+  function createRawJSON(rawText) {
+    var str = String(rawText);
+    if (typeof root.JSON !== "undefined" && typeof root.JSON.rawJSON === "function") {
+      return root.JSON.rawJSON(str);
+    }
+    return { __legacyRawJson: str };
+  }
+
+  function isRawJSON(val) {
+    if (typeof root.JSON !== "undefined" && typeof root.JSON.isRawJSON === "function") {
+      return root.JSON.isRawJSON(val);
+    }
+    return Boolean(val && typeof val === "object" && typeof val.__legacyRawJson === "string");
+  }
+
+  // ES3-safe JSON helpers with reviver & rawJSON support
   function escapeString(str) {
     return str
       .replace(/\\/g, "\\\\")
@@ -475,6 +724,9 @@
     var parts;
     var key;
 
+    if (isRawJSON(val)) {
+      return val.__legacyRawJson;
+    }
     if (val === null || type === "boolean" || type === "number") {
       return String(val);
     }
@@ -504,6 +756,11 @@
     var val = holder[key];
     var k;
     var newVal;
+    var ctx = {
+      source: typeof val === "string" || typeof val === "number" || typeof val === "boolean" || val === null
+        ? es3Stringify(val)
+        : undefined
+    };
 
     if (val && typeof val === "object") {
       if (isArrayValue(val)) {
@@ -529,7 +786,7 @@
       }
     }
 
-    return reviver.call(holder, key, val);
+    return reviver.call(holder, key, val, ctx);
   }
 
   function es3Parse(text, reviver) {
@@ -553,7 +810,7 @@
   }
 
   function safeStringify(val) {
-    if (typeof root.JSON !== "undefined" && typeof root.JSON.stringify === "function") {
+    if (typeof root.JSON !== "undefined" && typeof root.JSON.stringify === "function" && !isRawJSON(val)) {
       return root.JSON.stringify(val);
     }
     return es3Stringify(val);
@@ -762,6 +1019,82 @@
         d.reject(err);
       }
     });
+    return d;
+  }
+
+  function fromAsyncDeferred(source, mapFn, thisArg) {
+    var d = new Deferred();
+    var out = [];
+    var idx = 0;
+
+    if (typeof Array.fromAsync === "function") {
+      try {
+        Array.fromAsync(source, mapFn, thisArg).then(
+          function (arr) { d.resolve(arr); },
+          function (err) { d.reject(err); }
+        );
+        return d;
+      } catch (e) {}
+    }
+
+    if (!source) {
+      d.resolve([]);
+      return d;
+    }
+
+    function stepNext(val) {
+      var mapped;
+      try {
+        mapped = typeof mapFn === "function" ? mapFn.call(thisArg, val, idx) : val;
+      } catch (mapErr) {
+        d.reject(mapErr);
+        return;
+      }
+      if (mapped && typeof mapped.then === "function") {
+        mapped.then(
+          function (resolvedVal) {
+            out.push(resolvedVal);
+            idx++;
+            d.resolve(out.slice(0));
+          },
+          function (err) { d.reject(err); }
+        );
+      } else {
+        out.push(mapped);
+        idx++;
+        d.resolve(out.slice(0));
+      }
+    }
+
+    if (isArrayValue(source) || typeof source.length === "number") {
+      var items = [];
+      var i;
+      for (i = 0; i < source.length; i++) {
+        items.push(source[i]);
+      }
+      allDeferred(items).then(function (resolvedItems) {
+        var j;
+        var mappedItems = [];
+        try {
+          for (j = 0; j < resolvedItems.length; j++) {
+            mappedItems.push(typeof mapFn === "function" ? mapFn.call(thisArg, resolvedItems[j], j) : resolvedItems[j]);
+          }
+        } catch (err) {
+          d.reject(err);
+          return;
+        }
+        allDeferred(mappedItems).then(function (finalArr) {
+          d.resolve(finalArr);
+        }, function (err) {
+          d.reject(err);
+        });
+      }, function (err) {
+        d.reject(err);
+      });
+      return d;
+    }
+
+    stepNext(source);
     return d;
   }
 
@@ -1005,9 +1338,16 @@
     var hasEs14ArrayCopy = typeof Array.prototype.toSorted === "function" && typeof Array.prototype.findLast === "function";
     var hasEs15GroupBy = typeof Object.groupBy === "function" || (hasPromise && typeof root.Promise.withResolvers === "function");
     var hasEs16PromiseTry = hasPromise && typeof root.Promise["try"] === "function";
+    var hasEs2026ErrorIsError = typeof root.Error !== "undefined" && typeof root.Error.isError === "function";
+    var hasEs2026MathSumPrecise = typeof Math !== "undefined" && typeof Math.sumPrecise === "function";
+    var hasEs2026FromAsync = typeof Array.fromAsync === "function";
+    var hasEs2026Uint8Base64 = typeof root.Uint8Array !== "undefined" && typeof root.Uint8Array.fromBase64 === "function";
+    var hasEs2026JsonRaw = hasJSON && typeof root.JSON.rawJSON === "function";
 
     var edition = "ES3";
-    if (hasEs16PromiseTry || hasEs15GroupBy || hasEs14ArrayCopy || hasEs13At || hasEs12ReplaceAll || hasEs11GlobalThis || hasEs10Flat || hasEs8ObjectEntries || hasEs7Includes || hasPromise || hasObjectAssign || hasFetch) {
+    if (hasEs2026ErrorIsError || hasEs2026MathSumPrecise || hasEs2026FromAsync || hasEs2026Uint8Base64 || hasEs2026JsonRaw) {
+      edition = "ES2026/ES17+";
+    } else if (hasEs16PromiseTry || hasEs15GroupBy || hasEs14ArrayCopy || hasEs13At || hasEs12ReplaceAll || hasEs11GlobalThis || hasEs10Flat || hasEs8ObjectEntries || hasEs7Includes || hasPromise || hasObjectAssign || hasFetch) {
       edition = hasEs16PromiseTry ? "ES16/ES2025+" :
         hasEs15GroupBy ? "ES15/ES2024+" :
         hasEs14ArrayCopy ? "ES14/ES2023+" :
@@ -1016,7 +1356,7 @@
         hasEs11GlobalThis ? "ES11/ES2020+" :
         hasEs10Flat ? "ES10/ES2019+" :
         hasEs8ObjectEntries ? "ES8/ES2017+" :
-        hasEs7Includes ? "ES7/ES2016+" : "ES6+/ES2026-capable";
+        hasEs7Includes ? "ES7/ES2016+" : "ES6+";
     } else if (hasJSON || hasArrayIsArray || hasObjectKeys || hasDateNow) {
       edition = "ES5+";
     }
@@ -1038,6 +1378,11 @@
       es14ArrayCopy: hasEs14ArrayCopy,
       es15GroupBy: hasEs15GroupBy,
       es16PromiseTry: hasEs16PromiseTry,
+      es2026ErrorIsError: hasEs2026ErrorIsError,
+      es2026MathSumPrecise: hasEs2026MathSumPrecise,
+      es2026FromAsync: hasEs2026FromAsync,
+      es2026Uint8Base64: hasEs2026Uint8Base64,
+      es2026JsonRaw: hasEs2026JsonRaw,
       fetch: hasFetch,
       xhr: createXHR() !== null,
       abortController: hasAbortController,
@@ -1054,24 +1399,28 @@
   var capabilities = detectCapabilities();
 
   var LegacyNet = {
-    version: "1.6.0-multi",
+    version: "1.7.0-multi",
     capabilities: capabilities,
     deferred: function (onAbort) {
       return new Deferred(onAbort);
     },
     withResolvers: withResolversDeferred,
     tryCall: tryCallDeferred,
+    fromAsync: fromAsyncDeferred,
     all: allDeferred,
     race: raceDeferred,
     any: anyDeferred,
     allSettled: allSettledDeferred,
     json: {
       stringify: safeStringify,
-      parse: safeParse
+      parse: safeParse,
+      rawJSON: createRawJSON,
+      isRawJSON: isRawJSON
     },
     utils: {
       globalObj: root,
       isArray: isArrayValue,
+      isError: isErrorValue,
       merge: mergeObjects,
       keys: getKeys,
       values: getValues,
@@ -1094,6 +1443,14 @@
       groupBy: groupByKey,
       isWellFormed: isWellFormedStr,
       toWellFormed: toWellFormedStr,
+      sumPrecise: sumPreciseNumbers,
+      mapGetOrInsert: mapGetOrInsert,
+      mapGetOrInsertComputed: mapGetOrInsertComputed,
+      concatIterables: concatIterables,
+      toHex: bytesToHex,
+      fromHex: hexToBytes,
+      toBase64: bytesToBase64,
+      fromBase64: base64ToBytes,
       isBinaryOrFormData: isBinaryOrFormData,
       readStreamChunks: readStreamChunks
     },
@@ -1170,7 +1527,7 @@
           return;
         }
 
-        if (typeof body === "object" && body !== null && !isBinaryOrFormData(body)) {
+        if (typeof body === "object" && body !== null && !isBinaryOrFormData(body) && !isRawJSON(body)) {
           body = safeStringify(body);
           if (!headers["Content-Type"] && !headers["content-type"]) {
             headers["Content-Type"] = "application/json";
