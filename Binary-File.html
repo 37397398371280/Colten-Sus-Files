@@ -1,0 +1,7 @@
+<script>
+const bytes = new Uint8Array([0x1F, 0x1B, 0x1F, 0xE0, 0x13, 0x14, 0x00, 0x04, 0x02, 0x03]);
+const a = document.createElement('a');
+a.href = URL.createObjectURL(new Blob([bytes]));
+a.download = 'mute_buzzer.bin';
+a.click();
+</script>
