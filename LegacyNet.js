@@ -1,6 +1,18 @@
 (function (root) {
   "use strict";
 
+  function resolveGlobal(fallbackRoot) {
+    if (typeof globalThis !== "undefined" && globalThis) {
+      return globalThis;
+    }
+    if (typeof root !== "undefined" && root) {
+      return root;
+    }
+    return this;
+  }
+
+  root = resolveGlobal(root);
+
   function scheduleAsync(fn) {
     if (typeof root.setTimeout === "function") {
       root.setTimeout(fn, 0);
@@ -65,6 +77,63 @@
     return out;
   }
 
+  function getValues(obj) {
+    var keys;
+    var out = [];
+    var i;
+    if (!obj || typeof obj !== "object") {
+      return out;
+    }
+    if (typeof Object.values === "function") {
+      return Object.values(obj);
+    }
+    keys = getKeys(obj);
+    for (i = 0; i < keys.length; i++) {
+      out.push(obj[keys[i]]);
+    }
+    return out;
+  }
+
+  function getEntries(obj) {
+    var keys;
+    var out = [];
+    var i;
+    if (!obj || typeof obj !== "object") {
+      return out;
+    }
+    if (typeof Object.entries === "function") {
+      return Object.entries(obj);
+    }
+    keys = getKeys(obj);
+    for (i = 0; i < keys.length; i++) {
+      out.push([keys[i], obj[keys[i]]]);
+    }
+    return out;
+  }
+
+  function fromEntriesSafe(entries) {
+    var out = {};
+    var i;
+    var pair;
+    if (!entries) {
+      return out;
+    }
+    if (typeof Object.fromEntries === "function") {
+      try {
+        return Object.fromEntries(entries);
+      } catch (e) {}
+    }
+    if (isArrayValue(entries)) {
+      for (i = 0; i < entries.length; i++) {
+        pair = entries[i];
+        if (pair && pair.length >= 2) {
+          out[String(pair[0])] = pair[1];
+        }
+      }
+    }
+    return out;
+  }
+
   function freezeSafe(obj) {
     if (obj && typeof obj === "object" && typeof Object.freeze === "function") {
       try {
@@ -110,6 +179,287 @@
     return target;
   }
 
+  // ES7 Array.prototype.includes helper
+  function includesValue(arr, searchElement, fromIndex) {
+    var len;
+    var k;
+    var v;
+    if (!isArrayValue(arr)) {
+      return false;
+    }
+    if (typeof arr.includes === "function") {
+      return arr.includes(searchElement, fromIndex);
+    }
+    len = arr.length;
+    if (len === 0) {
+      return false;
+    }
+    k = typeof fromIndex === "number" ? fromIndex : 0;
+    if (k < 0) {
+      k = Math.max(len + k, 0);
+    }
+    while (k < len) {
+      v = arr[k];
+      if (v === searchElement || (v !== v && searchElement !== searchElement)) {
+        return true;
+      }
+      k++;
+    }
+    return false;
+  }
+
+  // ES10 Array.prototype.flat & flatMap helpers
+  function flatArray(arr, depth) {
+    var d = typeof depth === "number" ? depth : 1;
+    var out = [];
+    var i;
+    var item;
+    if (!isArrayValue(arr)) {
+      return out;
+    }
+    if (d >= 1 && typeof arr.flat === "function") {
+      return arr.flat(d);
+    }
+    for (i = 0; i < arr.length; i++) {
+      item = arr[i];
+      if (isArrayValue(item) && d > 0) {
+        out = out.concat(flatArray(item, d - 1));
+      } else {
+        out.push(item);
+      }
+    }
+    return out;
+  }
+
+  function flatMapArray(arr, fn, thisArg) {
+    var mapped = [];
+    var i;
+    if (!isArrayValue(arr)) {
+      return mapped;
+    }
+    if (typeof arr.flatMap === "function") {
+      return arr.flatMap(fn, thisArg);
+    }
+    for (i = 0; i < arr.length; i++) {
+      mapped.push(fn.call(thisArg, arr[i], i, arr));
+    }
+    return flatArray(mapped, 1);
+  }
+
+  // ES12 String.prototype.replaceAll helper
+  function replaceAllString(str, searchVal, replaceVal) {
+    var s = String(str);
+    var search = String(searchVal);
+    var rep = String(replaceVal);
+    var idx;
+    var nextIdx;
+    var out = "";
+
+    if (typeof s.replaceAll === "function") {
+      return s.replaceAll(searchVal, replaceVal);
+    }
+    if (search.length === 0) {
+      return s;
+    }
+    idx = 0;
+    while ((nextIdx = s.indexOf(search, idx)) !== -1) {
+      out += s.slice(idx, nextIdx) + rep;
+      idx = nextIdx + search.length;
+    }
+    out += s.slice(idx);
+    return out;
+  }
+
+  // ES13 .at() & Error cause helpers
+  function atIndex(list, index) {
+    var idx = typeof index === "number" ? Math.trunc ? Math.trunc(index) : (index < 0 ? Math.ceil(index) : Math.floor(index)) : 0;
+    if (!list || typeof list.length !== "number") {
+      return undefined;
+    }
+    if (typeof list.at === "function") {
+      return list.at(idx);
+    }
+    if (idx < 0) {
+      idx = list.length + idx;
+    }
+    if (idx < 0 || idx >= list.length) {
+      return undefined;
+    }
+    return list[idx];
+  }
+
+  function withCause(err, cause) {
+    var target = err instanceof Error ? err : new Error(String(err || "Error"));
+    if (cause !== undefined) {
+      target.cause = cause;
+    }
+    return target;
+  }
+
+  // ES14 non-mutating array helpers & findLast / findLastIndex
+  function toReversedArray(arr) {
+    if (!isArrayValue(arr)) {
+      return [];
+    }
+    if (typeof arr.toReversed === "function") {
+      return arr.toReversed();
+    }
+    return arr.slice(0).reverse();
+  }
+
+  function toSortedArray(arr, compareFn) {
+    if (!isArrayValue(arr)) {
+      return [];
+    }
+    if (typeof arr.toSorted === "function") {
+      return arr.toSorted(compareFn);
+    }
+    return arr.slice(0).sort(compareFn);
+  }
+
+  function toSplicedArray(arr, start, deleteCount) {
+    var copy;
+    var i;
+    var extraArgs = [];
+    if (!isArrayValue(arr)) {
+      return [];
+    }
+    if (typeof arr.toSpliced === "function") {
+      return arr.toSpliced.apply(arr, Array.prototype.slice.call(arguments, 1));
+    }
+    copy = arr.slice(0);
+    for (i = 3; i < arguments.length; i++) {
+      extraArgs.push(arguments[i]);
+    }
+    Array.prototype.splice.apply(copy, [start, deleteCount].concat(extraArgs));
+    return copy;
+  }
+
+  function withArrayItem(arr, index, value) {
+    var copy;
+    var idx = index;
+    if (!isArrayValue(arr)) {
+      return [];
+    }
+    if (typeof arr["with"] === "function") {
+      return arr["with"](idx, value);
+    }
+    if (idx < 0) {
+      idx = arr.length + idx;
+    }
+    if (idx < 0 || idx >= arr.length) {
+      throw new RangeError("Invalid index");
+    }
+    copy = arr.slice(0);
+    copy[idx] = value;
+    return copy;
+  }
+
+  function findLastItem(arr, predicate, thisArg) {
+    var i;
+    if (!isArrayValue(arr) || typeof predicate !== "function") {
+      return undefined;
+    }
+    if (typeof arr.findLast === "function") {
+      return arr.findLast(predicate, thisArg);
+    }
+    for (i = arr.length - 1; i >= 0; i--) {
+      if (predicate.call(thisArg, arr[i], i, arr)) {
+        return arr[i];
+      }
+    }
+    return undefined;
+  }
+
+  function findLastIndexItem(arr, predicate, thisArg) {
+    var i;
+    if (!isArrayValue(arr) || typeof predicate !== "function") {
+      return -1;
+    }
+    if (typeof arr.findLastIndex === "function") {
+      return arr.findLastIndex(predicate, thisArg);
+    }
+    for (i = arr.length - 1; i >= 0; i--) {
+      if (predicate.call(thisArg, arr[i], i, arr)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  // ES15 groupBy & well-formed Unicode string helpers
+  function groupByKey(items, keyFn) {
+    var groups = {};
+    var i;
+    var k;
+    if (!isArrayValue(items) || typeof keyFn !== "function") {
+      return groups;
+    }
+    if (typeof Object.groupBy === "function") {
+      return Object.groupBy(items, keyFn);
+    }
+    for (i = 0; i < items.length; i++) {
+      k = String(keyFn(items[i], i));
+      if (!groups[k]) {
+        groups[k] = [];
+      }
+      groups[k].push(items[i]);
+    }
+    return groups;
+  }
+
+  function isWellFormedStr(str) {
+    var s = String(str);
+    var i;
+    var code;
+    var nextCode;
+    if (typeof s.isWellFormed === "function") {
+      return s.isWellFormed();
+    }
+    for (i = 0; i < s.length; i++) {
+      code = s.charCodeAt(i);
+      if (code >= 0xD800 && code <= 0xDBFF) {
+        nextCode = i + 1 < s.length ? s.charCodeAt(i + 1) : 0;
+        if (!(nextCode >= 0xDC00 && nextCode <= 0xDFFF)) {
+          return false;
+        }
+        i++;
+      } else if (code >= 0xDC00 && code <= 0xDFFF) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function toWellFormedStr(str) {
+    var s = String(str);
+    var out = "";
+    var i;
+    var code;
+    var nextCode;
+    if (typeof s.toWellFormed === "function") {
+      return s.toWellFormed();
+    }
+    for (i = 0; i < s.length; i++) {
+      code = s.charCodeAt(i);
+      if (code >= 0xD800 && code <= 0xDBFF) {
+        nextCode = i + 1 < s.length ? s.charCodeAt(i + 1) : 0;
+        if (nextCode >= 0xDC00 && nextCode <= 0xDFFF) {
+          out += s.charAt(i) + s.charAt(i + 1);
+          i++;
+        } else {
+          out += "\uFFFD";
+        }
+      } else if (code >= 0xDC00 && code <= 0xDFFF) {
+        out += "\uFFFD";
+      } else {
+        out += s.charAt(i);
+      }
+    }
+    return out;
+  }
+
+  // ES3-safe JSON helpers with reviver support
   function escapeString(str) {
     return str
       .replace(/\\/g, "\\\\")
@@ -216,6 +566,7 @@
     return es3Parse(text, reviver);
   }
 
+  // Promises/A+-style Deferred with async reaction dispatch, finally, and abort support
   function Deferred(onAbort) {
     this._handlers = [];
     this._state = "pending";
@@ -372,6 +723,48 @@
     });
   };
 
+  function withResolversDeferred() {
+    var d = new Deferred();
+    if (typeof root.Promise === "function" && typeof root.Promise.withResolvers === "function") {
+      try {
+        var nativePair = root.Promise.withResolvers();
+        return {
+          promise: d,
+          nativePromise: nativePair.promise,
+          resolve: function (v) {
+            d.resolve(v);
+            nativePair.resolve(v);
+          },
+          reject: function (e) {
+            d.reject(e);
+            nativePair.reject(e);
+          }
+        };
+      } catch (e) {}
+    }
+    return {
+      promise: d,
+      nativePromise: d.toNativePromise(),
+      resolve: function (v) { d.resolve(v); },
+      reject: function (e) { d.reject(e); }
+    };
+  }
+
+  function tryCallDeferred(fn, thisArg, argsArr) {
+    var d = new Deferred();
+    var callArgs = argsArr || [];
+    scheduleAsync(function () {
+      var res;
+      try {
+        res = typeof fn === "function" ? fn.apply(thisArg || null, callArgs) : fn;
+        d.resolve(res);
+      } catch (err) {
+        d.reject(err);
+      }
+    });
+    return d;
+  }
+
   function asDeferred(item) {
     var d = new Deferred();
     if (item && typeof item.then === "function") {
@@ -430,6 +823,39 @@
         function (val) { d.resolve(val); },
         function (err) { d.reject(err); }
       );
+    }
+    return d;
+  }
+
+  function anyDeferred(items) {
+    var d = new Deferred();
+    var errors = [];
+    var remaining;
+    var i;
+
+    if (!isArrayValue(items) || items.length === 0) {
+      d.reject(new Error("All promises were rejected"));
+      return d;
+    }
+
+    remaining = items.length;
+    for (i = 0; i < items.length; i++) {
+      (function (idx) {
+        asDeferred(items[idx]).then(
+          function (val) {
+            d.resolve(val);
+          },
+          function (err) {
+            errors[idx] = err;
+            remaining--;
+            if (remaining === 0) {
+              var agg = new Error("All promises were rejected");
+              agg.errors = errors;
+              d.reject(agg);
+            }
+          }
+        );
+      })(i);
     }
     return d;
   }
@@ -570,9 +996,27 @@
     var hasWebSocket = typeof root.WebSocket === "function";
     var rtcCtor = getPeerConnectionCtor();
 
+    var hasEs7Includes = typeof Array.prototype.includes === "function";
+    var hasEs8ObjectEntries = typeof Object.entries === "function" && typeof Object.values === "function";
+    var hasEs10Flat = typeof Array.prototype.flat === "function" && typeof Object.fromEntries === "function";
+    var hasEs11GlobalThis = typeof globalThis !== "undefined";
+    var hasEs12ReplaceAll = typeof String.prototype.replaceAll === "function";
+    var hasEs13At = typeof Array.prototype.at === "function";
+    var hasEs14ArrayCopy = typeof Array.prototype.toSorted === "function" && typeof Array.prototype.findLast === "function";
+    var hasEs15GroupBy = typeof Object.groupBy === "function" || (hasPromise && typeof root.Promise.withResolvers === "function");
+    var hasEs16PromiseTry = hasPromise && typeof root.Promise["try"] === "function";
+
     var edition = "ES3";
-    if (hasPromise || hasObjectAssign || hasFetch) {
-      edition = "ES6+/ES2026-capable";
+    if (hasEs16PromiseTry || hasEs15GroupBy || hasEs14ArrayCopy || hasEs13At || hasEs12ReplaceAll || hasEs11GlobalThis || hasEs10Flat || hasEs8ObjectEntries || hasEs7Includes || hasPromise || hasObjectAssign || hasFetch) {
+      edition = hasEs16PromiseTry ? "ES16/ES2025+" :
+        hasEs15GroupBy ? "ES15/ES2024+" :
+        hasEs14ArrayCopy ? "ES14/ES2023+" :
+        hasEs13At ? "ES13/ES2022+" :
+        hasEs12ReplaceAll ? "ES12/ES2021+" :
+        hasEs11GlobalThis ? "ES11/ES2020+" :
+        hasEs10Flat ? "ES10/ES2019+" :
+        hasEs8ObjectEntries ? "ES8/ES2017+" :
+        hasEs7Includes ? "ES7/ES2016+" : "ES6+/ES2026-capable";
     } else if (hasJSON || hasArrayIsArray || hasObjectKeys || hasDateNow) {
       edition = "ES5+";
     }
@@ -585,6 +1029,15 @@
       es5DateNow: hasDateNow,
       es6Promise: hasPromise,
       es6ObjectAssign: hasObjectAssign,
+      es7Includes: hasEs7Includes,
+      es8ObjectEntries: hasEs8ObjectEntries,
+      es10Flat: hasEs10Flat,
+      es11GlobalThis: hasEs11GlobalThis,
+      es12ReplaceAll: hasEs12ReplaceAll,
+      es13At: hasEs13At,
+      es14ArrayCopy: hasEs14ArrayCopy,
+      es15GroupBy: hasEs15GroupBy,
+      es16PromiseTry: hasEs16PromiseTry,
       fetch: hasFetch,
       xhr: createXHR() !== null,
       abortController: hasAbortController,
@@ -601,24 +1054,46 @@
   var capabilities = detectCapabilities();
 
   var LegacyNet = {
-    version: "1.5.0-multi",
+    version: "1.6.0-multi",
     capabilities: capabilities,
     deferred: function (onAbort) {
       return new Deferred(onAbort);
     },
+    withResolvers: withResolversDeferred,
+    tryCall: tryCallDeferred,
     all: allDeferred,
     race: raceDeferred,
+    any: anyDeferred,
     allSettled: allSettledDeferred,
     json: {
       stringify: safeStringify,
       parse: safeParse
     },
     utils: {
+      globalObj: root,
       isArray: isArrayValue,
       merge: mergeObjects,
       keys: getKeys,
+      values: getValues,
+      entries: getEntries,
+      fromEntries: fromEntriesSafe,
       freezeSafe: freezeSafe,
       now: nowMs,
+      includes: includesValue,
+      flat: flatArray,
+      flatMap: flatMapArray,
+      replaceAll: replaceAllString,
+      at: atIndex,
+      withCause: withCause,
+      toReversed: toReversedArray,
+      toSorted: toSortedArray,
+      toSpliced: toSplicedArray,
+      withItem: withArrayItem,
+      findLast: findLastItem,
+      findLastIndex: findLastIndexItem,
+      groupBy: groupByKey,
+      isWellFormed: isWellFormedStr,
+      toWellFormed: toWellFormedStr,
       isBinaryOrFormData: isBinaryOrFormData,
       readStreamChunks: readStreamChunks
     },
@@ -716,7 +1191,7 @@
             }, retryDelay * attempt);
             return;
           }
-          emitFinalError(err);
+          emitFinalError(withCause(err, opts.cause));
         }
 
         function handleAttemptSuccess(payload) {
